@@ -1,0 +1,49 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* Clean base for the entire application */
+html,
+body,
+#root {
+  margin: 0;
+  padding: 0;
+  width: 100%;
+  min-height: 100%; /* Allows height to expand dynamically for scrollable pages */
+  background-color: #09090b; /* zinc-950 dark theme foundation */
+  color: #f4f4f5; /* zinc-100 standard text */
+  font-family: ui-sans-serif, system-ui, sans-serif;
+  /* Global overflow: hidden has been removed to allow scrolling on Home & Profile */
+}
+
+/* Strict container dimensions for Leaflet to prevent collapsing */
+.leaflet-container {
+  width: 100% !important;
+  height: 100% !important;
+  background-color: #09090b !important;
+  outline: none;
+}
+
+/* Standard overrides to fix default input and button background/text colors */
+input, select, textarea {
+  background-color: #18181b !important; /* zinc-900 */
+  color: #f4f4f5 !important; /* zinc-100 */
+  border-color: #27272a !important; /* zinc-800 */
+}
+
+input:focus, select:focus {
+  outline: none !important;
+  border-color: #d97706 !important; /* Amber brand accent */
+}
+
+/* Custom scrollbar profiles for clean navigation */
+::-webkit-scrollbar {
+  width: 6px;
+}
+::-webkit-scrollbar-track {
+  background: #09090b;
+}
+::-webkit-scrollbar-thumb {
+  background: #27272a;
+  border-radius: 3px;
+}
