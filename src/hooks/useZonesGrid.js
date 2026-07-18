@@ -4,7 +4,6 @@ import { supabase } from '../lib/supabase';
 const DB_NAME = 'RunRajyaOfflineDB';
 const DB_VERSION = 2;
 
-// Utility to open the local DB and configure its stores
 function openDB() {
   return new Promise((resolve, reject) => {
     const request = indexedDB.open(DB_NAME, DB_VERSION);
@@ -36,33 +35,41 @@ export function useZonesGrid() {
         setLoading(true);
         const db = await openDB();
         
-        // 1. Attempt to fetch from local IndexedDB cache
         const tx = db.transaction('zones_grid', 'readonly');
-        const store = tx.objectStoreName ? tx.objectStore('zones_grid') : tx.objectStore('zones_grid');
+        const store = tx.objectStore('zones_grid');
         
         const cachedZones = await new Promise((resolve) => {
           const req = store.getAll();
-          req.onsuccess = () => resolve(req.result);
+          req.onsuccess = () => resolve(req.result || []);
           req.onerror = () => resolve([]);
         });
 
-        if (cachedZones && cachedZones.length > 0) {
+        // Self-Healing Cache:
+        // If local cache is empty, corrupted, or has fewer than 4,000 of the 5,212 cells,
+        // bypass the cache and fetch a fresh complete copy from Supabase to repair it.
+        if (cachedZones && cachedZones.length >= 4000) {
           setGrid(cachedZones);
           setLoading(false);
           return;
         }
 
-        // 2. Fetch from Supabase if IndexedDB is empty
+        console.log(`Cache missing or incomplete (${cachedZones.length} cells). Fetching fresh grid from Supabase...`);
+
+        // Fetch complete active coordinates from database
         const { data: remoteZones, error: fetchError } = await supabase
           .from('zones')
           .select('id, boundary, owner_id, faction_id, captured_at');
 
         if (fetchError) throw fetchError;
 
-        // 3. Cache the fetched data into IndexedDB
         if (remoteZones && remoteZones.length > 0) {
+          // Open fresh readwrite transaction to overwrite and repair local cache
           const writeTx = db.transaction('zones_grid', 'readwrite');
           const writeStore = writeTx.objectStore('zones_grid');
+          
+          // Clear any corrupt/old rows first
+          writeStore.clear();
+
           remoteZones.forEach((zone) => {
             writeStore.put(zone);
           });
@@ -71,7 +78,7 @@ export function useZonesGrid() {
       } catch (err) {
         console.error('Failed to initialize zones grid:', err);
         setError(err.message || 'Error loading zones layout.');
-      } finally {
+      } {
         setLoading(false);
       }
     }

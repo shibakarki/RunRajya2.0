@@ -25,19 +25,26 @@ export default function ZoneLayer({ zones = [], ownedZones = {}, position, curre
 
   // Calculates squared distance from player position to cell center for fast sorting
   const getDistanceSquared = (zone) => {
-    if (!zone.boundary || zone.boundary.length === 0) return Infinity;
-    
-    let sumLat = 0, sumLng = 0;
-    zone.boundary.forEach((p) => {
-      sumLat += p.lat ?? p[0];
-      sumLng += p.lng ?? p[1];
-    });
-    const centerLat = sumLat / zone.boundary.length;
-    const centerLng = sumLng / zone.boundary.length;
+    try {
+      // Defensive check: handle stringified database objects safely
+      const coords = typeof zone.boundary === 'string' ? JSON.parse(zone.boundary) : zone.boundary;
+      if (!Array.isArray(coords) || coords.length === 0) return Infinity;
+      
+      let sumLat = 0, sumLng = 0;
+      coords.forEach((p) => {
+        sumLat += p.lat !== undefined ? p.lat : (p[0] !== undefined ? p[0] : 0);
+        sumLng += p.lng !== undefined ? p.lng : (p[1] !== undefined ? p[1] : 0);
+      });
+      const centerLat = sumLat / coords.length;
+      const centerLng = sumLng / coords.length;
 
-    const dLat = centerLat - position.lat;
-    const dLng = centerLng - position.lng;
-    return dLat * dLat + dLng * dLng;
+      const dLat = centerLat - position.lat;
+      const dLng = centerLng - position.lng;
+      return dLat * dLat + dLng * dLng;
+    } catch (e) {
+      console.warn('Error calculating distance for cell:', zone.id, e);
+      return Infinity;
+    }
   };
 
   // Sort and slice to only render the 25 closest cells (5x5 grid surrounding the player)
@@ -48,7 +55,11 @@ export default function ZoneLayer({ zones = [], ownedZones = {}, position, curre
   return (
     <>
       {localGrid.map((zone) => {
-        const positions = zone.boundary.map((p) => {
+        // Defensive check: handle stringified database objects safely
+        const coords = typeof zone.boundary === 'string' ? JSON.parse(zone.boundary) : zone.boundary;
+        if (!Array.isArray(coords)) return null;
+
+        const positions = coords.map((p) => {
           if (Array.isArray(p)) {
             return [p[0], p[1]];
           }
