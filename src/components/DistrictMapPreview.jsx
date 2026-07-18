@@ -17,11 +17,9 @@ const WORLD_OUTER_RING = [
 ];
 
 /**
- * Helper to parse dynamic boundary data.
- * Auto-detects coordinate order:
- * Nepal coordinates sit around Lat 27.x / Lng 83.x.
- * If the first element is > 50, the file order is [Lng, Lat] (needs to be swapped to Lat/Lng).
- * If the first element is < 50, the file order is [Lat, Lng] (already correct).
+ * Robust GIS Parser:
+ * Auto-detects whether coordinates are stored as objects ({lat, lng} / {latitude, longitude})
+ * or standard arrays, swaps axes only if needed, and guarantees valid numeric values.
  */
 const getLeafletBoundaryCoords = (geoJson) => {
   try {
@@ -40,15 +38,34 @@ const getLeafletBoundaryCoords = (geoJson) => {
 
     if (rawCoords && rawCoords.length > 0) {
       const firstPoint = rawCoords[0];
-      const firstVal = firstPoint[0];
+      
+      let isObject = false;
+      let firstVal = 0;
+      
+      // Auto-detect structure type
+      if (firstPoint && typeof firstPoint === 'object' && !Array.isArray(firstPoint)) {
+        isObject = true;
+        firstVal = firstPoint.lng || firstPoint.longitude || 0;
+      } else if (Array.isArray(firstPoint)) {
+        firstVal = firstPoint[0];
+      }
+
+      // Nepal coordinates sit around Lng 83.x / Lat 27.x
       const needsSwap = firstVal > 50;
 
       return rawCoords.map(coord => {
-        if (needsSwap) {
-          return [coord[1], coord[0]]; // Swap Lng/Lat to Lat/Lng
-        } else {
-          return [coord[0], coord[1]]; // Keep as Lat/Lng
+        if (isObject) {
+          const latVal = coord.lat !== undefined ? coord.lat : coord.latitude;
+          const lngVal = coord.lng !== undefined ? coord.lng : coord.longitude;
+          return [Number(latVal) || 0, Number(lngVal) || 0];
+        } else if (Array.isArray(coord)) {
+          if (needsSwap) {
+            return [Number(coord[1]) || 0, Number(coord[0]) || 0]; // Swap Lng/Lat to Lat/Lng
+          } else {
+            return [Number(coord[0]) || 0, Number(coord[1]) || 0]; // Keep Lat/Lng
+          }
         }
+        return [0, 0];
       });
     }
   } catch (err) {
@@ -84,15 +101,11 @@ export default function DistrictMapPreview() {
         </span>
       </div>
 
-      {/* 
-        Static MapContainer:
-        Zoom locked to 9 to zoom out and ensure the entire district boundary 
-        is visible on all monitor resolutions.
-      */}
+      {/* Static MapContainer */}
       <div className="flex-1 w-full h-full">
         <MapContainer
           center={FALLBACK_CENTER}
-          zoom={9} // Zoom level 9 ensures the full vertical extent is visible
+          zoom={9}
           minZoom={9}
           maxZoom={9}
           zoomControl={false}

@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react';
 import { MapContainer, TileLayer, Marker, Polygon, useMap } from 'react-leaflet';
 import L from 'leaflet';
 import 'leaflet/dist/leaflet.css';
-import ZoneLayer from './ZoneLayer'; // Cleaned extensionless import
+import ZoneLayer from './ZoneLayer'; 
 
 import rupandehiGeoJson from '../data/rupandehi.json'; 
 
@@ -15,6 +15,11 @@ const WORLD_OUTER_RING = [
   [-90, -180]
 ];
 
+/**
+ * Robust GIS Parser:
+ * Auto-detects whether coordinates are stored as objects ({lat, lng} / {latitude, longitude})
+ * or standard arrays, swaps axes only if needed, and guarantees valid numeric values.
+ */
 const getLeafletBoundaryCoords = (geoJson) => {
   try {
     let rawCoords = [];
@@ -32,15 +37,34 @@ const getLeafletBoundaryCoords = (geoJson) => {
 
     if (rawCoords && rawCoords.length > 0) {
       const firstPoint = rawCoords[0];
-      const firstVal = firstPoint[0];
+      
+      let isObject = false;
+      let firstVal = 0;
+      
+      // Auto-detect structure type
+      if (firstPoint && typeof firstPoint === 'object' && !Array.isArray(firstPoint)) {
+        isObject = true;
+        firstVal = firstPoint.lng || firstPoint.longitude || 0;
+      } else if (Array.isArray(firstPoint)) {
+        firstVal = firstPoint[0];
+      }
+
+      // Nepal coordinates sit around Lng 83.x / Lat 27.x
       const needsSwap = firstVal > 50;
 
       return rawCoords.map(coord => {
-        if (needsSwap) {
-          return [coord[1], coord[0]]; 
-        } else {
-          return [coord[0], coord[1]]; 
+        if (isObject) {
+          const latVal = coord.lat !== undefined ? coord.lat : coord.latitude;
+          const lngVal = coord.lng !== undefined ? coord.lng : coord.longitude;
+          return [Number(latVal) || 0, Number(lngVal) || 0];
+        } else if (Array.isArray(coord)) {
+          if (needsSwap) {
+            return [Number(coord[1]) || 0, Number(coord[0]) || 0]; // Swap Lng/Lat to Lat/Lng
+          } else {
+            return [Number(coord[0]) || 0, Number(coord[1]) || 0]; // Keep Lat/Lng
+          }
         }
+        return [0, 0];
       });
     }
   } catch (err) {
