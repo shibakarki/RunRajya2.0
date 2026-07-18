@@ -13,7 +13,7 @@ import { useCompass } from '../hooks/useCompass';
 import { useProfileStats } from '../hooks/useProfileStats';
 import { useAuth } from '../context/AuthContext';
 
-import { useZonesGrid } from '../hooks/useZonesGrid'; // Dynamic on-demand loader
+import { useZonesGrid } from '../hooks/useZonesGrid'; 
 import { useZoneCaptures } from '../hooks/useZoneCaptures';
 import { useOfflineSync } from '../hooks/useOfflineSync';
 
@@ -27,7 +27,7 @@ function getDistanceMeters(lat1, lon1, lat2, lon2) {
       Math.cos((lat2 * Math.PI) / 180) *
       Math.sin(dLon / 2) *
       Math.sin(dLon / 2);
-  const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1–a));
+  const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a)); // Corrected standard mathematical minus sign (-)
   return R * c;
 }
 
