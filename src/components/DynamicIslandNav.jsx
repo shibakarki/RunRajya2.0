@@ -1,7 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { Link, useLocation } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
-import { useRunSession } from '../hooks/useRunSession'; // Import global run session
 
 const FACTION_ACCENTS = {
   1: { name: 'LGM', text: 'text-yellow-500', border: 'border-yellow-500/20', bg: 'bg-yellow-500/10' },
@@ -16,9 +15,6 @@ export default function DynamicIslandNav() {
   const auth = useAuth();
   const user = auth?.session?.user;
   
-  // Consume the global run session metrics
-  const { sessionActive, duration } = useRunSession();
-
   const [isExpanded, setIsExpanded] = useState(false);
   const [networkOnline, setNetworkOnline] = useState(navigator.onLine);
 
@@ -34,17 +30,6 @@ export default function DynamicIslandNav() {
   }, []);
 
   const isActive = (path) => location.pathname === path;
-
-  const formatDuration = (seconds) => {
-    const hrs = Math.floor(seconds / 3600);
-    const mins = Math.floor((seconds % 3600) / 60);
-    const secs = seconds % 60;
-    return [
-      hrs > 0 ? String(hrs).padStart(2, '0') : null,
-      String(mins).padStart(2, '0'),
-      String(secs).padStart(2, '0')
-    ].filter(Boolean).join(':');
-  };
 
   const handleAuthTrigger = () => {
     const openFn = auth?.openModal || auth?.setModalOpen || auth?.toggleModal || auth?.requireAuth;
@@ -72,20 +57,12 @@ export default function DynamicIslandNav() {
             <span className="text-[8px] font-mono text-amber-500 uppercase tracking-widest">Nepal Sector</span>
           </Link>
 
-          {/* Displays dynamic global run session tracking pill */}
-          {sessionActive ? (
-            <div className="flex items-center gap-1.5 px-2.5 py-0.5 rounded border border-amber-500/30 text-[9px] font-mono uppercase bg-amber-500/5 text-amber-500 animate-pulse">
-              <span className="w-1.5 h-1.5 rounded-full bg-amber-500" />
-              <span>Run Active [{formatDuration(duration)}]</span>
-            </div>
-          ) : (
-            <div className={`flex items-center gap-1.5 px-2 py-0.5 rounded border text-[9px] font-mono uppercase ${
-              networkOnline ? 'border-emerald-900/40 text-emerald-500 bg-emerald-950/10' : 'border-red-900/40 text-red-500 bg-red-950/10'
-            }`}>
-              <span className={`w-1 h-1 rounded-full ${networkOnline ? 'bg-emerald-500' : 'bg-red-500'}`} />
-              <span>{networkOnline ? 'Sync Active' : 'Offline Mode'}</span>
-            </div>
-          )}
+          <div className={`flex items-center gap-1.5 px-2 py-0.5 rounded border text-[9px] font-mono uppercase ${
+            networkOnline ? 'border-emerald-900/40 text-emerald-500 bg-emerald-950/10' : 'border-red-900/40 text-red-500 bg-red-950/10'
+          }`}>
+            <span className={`w-1 h-1 rounded-full ${networkOnline ? 'bg-emerald-500' : 'bg-red-500'}`} />
+            <span>{networkOnline ? 'Sync Active' : 'Offline Mode'}</span>
+          </div>
         </div>
 
         <div className="flex items-center gap-8 h-full">
@@ -144,74 +121,19 @@ export default function DynamicIslandNav() {
       <div className="md:hidden fixed top-3 left-1/2 -translate-x-1/2 z-[1001] flex flex-col items-center select-none">
         <div 
           onClick={() => setIsExpanded(prev => !prev)}
-          className={`flex items-center justify-between bg-zinc-950/90 backdrop-blur-lg border border-zinc-800 shadow-2xl transition-all duration-300 ease-out cursor-pointer ${
-            isExpanded 
-              ? 'rounded-2xl px-6 py-4 w-[280px]' 
-              : 'rounded-full px-4 py-2.5 w-[140px]'
-          }`}
+          className="flex items-center justify-between bg-zinc-950/90 backdrop-blur-lg border border-zinc-800 shadow-2xl transition-all duration-300 ease-out cursor-pointer rounded-full px-4 py-2.5 w-[140px]"
         >
-          {!isExpanded ? (
-            /* Collapsed State: Displaying basic status parameters */
-            <div className="flex items-center justify-between w-full">
-              <div className="flex items-center gap-1.5">
-                <span className={`w-1.5 h-1.5 rounded-full ${sessionActive ? 'bg-amber-500 animate-pulse' : (networkOnline ? 'bg-emerald-500' : 'bg-red-500')}`} />
-                <span className="text-[10px] font-mono font-bold tracking-wider text-zinc-400 uppercase">
-                  {sessionActive ? formatDuration(duration) : (networkOnline ? 'ONLINE' : 'OFFLINE')}
-                </span>
-              </div>
-              <svg className="w-3.5 h-3.5 text-zinc-500" fill="none" stroke="currentColor" strokeWidth="2.5" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" d="M19.5 8.25l-7.5 7.5-7.5-7.5" />
-              </svg>
+          <div className="flex items-center justify-between w-full">
+            <div className="flex items-center gap-1.5">
+              <span className={`w-1.5 h-1.5 rounded-full ${networkOnline ? 'bg-emerald-500 animate-pulse' : 'bg-red-500'}`} />
+              <span className="text-[10px] font-mono font-bold tracking-wider text-zinc-400 uppercase">
+                {networkOnline ? 'ONLINE' : 'OFFLINE'}
+              </span>
             </div>
-          ) : (
-            /* Expanded State */
-            <div className="flex flex-col gap-4 w-full">
-              <div className="flex justify-between items-center border-b border-zinc-900 pb-2">
-                <span className="text-[9px] font-mono text-amber-500 uppercase tracking-widest font-black">
-                  {sessionActive ? `RUN ACTIVE [${formatDuration(duration)}]` : 'RunRajya Grid'}
-                </span>
-                <span className={`text-[8px] font-mono font-bold uppercase px-1.5 py-0.5 border rounded ${currentFaction.text} ${currentFaction.bg} ${currentFaction.border}`}>
-                  {currentFaction.name}
-                </span>
-              </div>
-
-              <div className="flex flex-col gap-2.5">
-                <Link 
-                  to="/" 
-                  className={`text-xs font-mono tracking-wider uppercase transition-colors py-1 flex items-center justify-between ${
-                    isActive('/') ? 'text-amber-500 font-bold' : 'text-zinc-400'
-                  }`}
-                >
-                  <span>Home</span>
-                  {isActive('/') && <span className="w-1.5 h-1.5 rounded-full bg-amber-500" />}
-                </Link>
-                <Link 
-                  to="/map" 
-                  className={`text-xs font-mono tracking-wider uppercase transition-colors py-1 flex items-center justify-between ${
-                    isActive('/map') ? 'text-amber-500 font-bold' : 'text-zinc-400'
-                  }`}
-                >
-                  <span>Sector Map</span>
-                  {isActive('/map') && <span className="w-1.5 h-1.5 rounded-full bg-amber-500" />}
-                </Link>
-                <Link 
-                  to="/profile" 
-                  className={`text-xs font-mono tracking-wider uppercase transition-colors py-1 flex items-center justify-between ${
-                    isActive('/profile') ? 'text-amber-500 font-bold' : 'text-zinc-400'
-                  }`}
-                >
-                  <span>Profile Dashboard</span>
-                  {isActive('/profile') && <span className="w-1.5 h-1.5 rounded-full bg-amber-500" />}
-                </Link>
-              </div>
-
-              <div className="flex justify-center pt-1 border-t border-zinc-900">
-                <svg className="w-3.5 h-3.5 text-zinc-600" fill="none" stroke="currentColor" strokeWidth="2.5" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" d="M4.5 15.75l7.5-7.5 7.5 7.5" />
-                </svg>
-              </div>
-            </div>
-          )}
+            <svg className="w-3.5 h-3.5 text-zinc-500" fill="none" stroke="currentColor" strokeWidth="2.5" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" d="M19.5 8.25l-7.5 7.5-7.5-7.5" />
+            </svg>
+          </div>
         </div>
       </div>
     </>
