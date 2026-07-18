@@ -4,7 +4,6 @@ import L from 'leaflet';
 import 'leaflet/dist/leaflet.css';
 import ZoneLayer from './ZoneLayer.jsx';
 
-// Import your custom boundary GeoJSON file
 import rupandehiGeoJson from '../data/rupandehi.json'; 
 
 const FALLBACK_CENTER = [27.5291, 83.447];
@@ -16,13 +15,6 @@ const WORLD_OUTER_RING = [
   [-90, -180]
 ];
 
-/**
- * Helper to parse dynamic boundary data.
- * Auto-detects coordinate order:
- * Nepal coordinates sit around Lat 27.x / Lng 83.x.
- * If the first element is > 50, the file order is [Lng, Lat] (needs to be swapped to Lat/Lng).
- * If the first element is < 50, the file order is [Lat, Lng] (already correct).
- */
 const getLeafletBoundaryCoords = (geoJson) => {
   try {
     let rawCoords = [];
@@ -45,9 +37,9 @@ const getLeafletBoundaryCoords = (geoJson) => {
 
       return rawCoords.map(coord => {
         if (needsSwap) {
-          return [coord[1], coord[0]]; // Swap Lng/Lat to Lat/Lng
+          return [coord[1], coord[0]]; 
         } else {
-          return [coord[0], coord[1]]; // Keep as Lat/Lng
+          return [coord[0], coord[1]]; 
         }
       });
     }
@@ -168,7 +160,8 @@ export default function MapCanvas({
           />
         )}
 
-        <ZoneLayer zones={zones} ownedZones={ownedZones} />
+        {/* Forward position to the updated ZoneLayer */}
+        <ZoneLayer zones={zones} ownedZones={ownedZones} position={position} />
 
         {position && (
           <Marker 

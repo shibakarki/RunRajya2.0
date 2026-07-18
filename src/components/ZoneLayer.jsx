@@ -1,5 +1,5 @@
-import React, { useState, useEffect } from 'react';
-import { Polygon, useMap } from 'react-leaflet';
+import React from 'react';
+import { Polygon } from 'react-leaflet';
 
 const FACTION_COLORS = {
   1: '#e2554f', // Red faction
@@ -14,47 +14,40 @@ const MINE_COLOR = '#22e6b0';
 
 /**
  * ZoneLayer – renders captured/uncaptured cells over MapCanvas.
- * Optimized with a dynamic viewport bounds filter and a zoom gate (>= 13)
- * to prevent SVG rendering bottlenecks on mobile browsers.
+ * Optimized to only render a 5x5 grid (25 closest zones) centered around the player
+ * to ensure high-performance rendering on mobile devices.
  */
-export default function ZoneLayer({ zones = [], ownedZones = {} }) {
-  const map = useMap();
-  const [currentZoom, setCurrentZoom] = useState(map.getZoom());
-  const [visibleBounds, setVisibleBounds] = useState(map.getBounds());
-
-  // Listen to map movement and zoom events to update clip bounds dynamically
-  useEffect(() => {
-    const updateViewport = () => {
-      setCurrentZoom(map.getZoom());
-      setVisibleBounds(map.getBounds());
-    };
-
-    map.on('moveend zoomend', updateViewport);
-    return () => {
-      map.off('moveend zoomend', updateViewport);
-    };
-  }, [map]);
-
-  // Zoom Gate: To protect mobile browser performance, do not render micro-grids 
-  // when zoomed out too far (below zoom level 13).
-  if (currentZoom < 13) {
+export default function ZoneLayer({ zones = [], ownedZones = {}, position }) {
+  // If no GPS lock is acquired yet, do not render any local grids
+  if (!position) {
     return null;
   }
 
-  // Viewport Clip Filter: Only render cells that physically intersect with the current screen viewport bounds
-  const visibleZones = zones.filter((zone) => {
-    if (!zone.boundary || zone.boundary.length === 0) return false;
+  // Calculates squared distance from player position to cell center for fast sorting
+  const getDistanceSquared = (zone) => {
+    if (!zone.boundary || zone.boundary.length === 0) return Infinity;
     
-    return zone.boundary.some((p) => {
-      const lat = p.lat ?? p[0];
-      const lng = p.lng ?? p[1];
-      return visibleBounds.contains([lat, lng]);
+    let sumLat = 0, sumLng = 0;
+    zone.boundary.forEach((p) => {
+      sumLat += p.lat ?? p[0];
+      sumLng += p.lng ?? p[1];
     });
-  });
+    const centerLat = sumLat / zone.boundary.length;
+    const centerLng = sumLng / zone.boundary.length;
+
+    const dLat = centerLat - position.lat;
+    const dLng = centerLng - position.lng;
+    return dLat * dLat + dLng * dLng;
+  };
+
+  // Sort and slice to only render the 25 closest cells (5x5 grid surrounding the player)
+  const localGrid = [...zones]
+    .sort((a, b) => getDistanceSquared(a) - getDistanceSquared(b))
+    .slice(0, 25);
 
   return (
     <>
-      {visibleZones.map((zone) => {
+      {localGrid.map((zone) => {
         const positions = zone.boundary.map((p) => {
           if (Array.isArray(p)) {
             return [p[0], p[1]];

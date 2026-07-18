@@ -13,12 +13,10 @@ import { useCompass } from '../hooks/useCompass';
 import { useProfileStats } from '../hooks/useProfileStats';
 import { useAuth } from '../context/AuthContext';
 
-// Game engine hooks for grid loading, optimistic capturing, and automatic syncing
 import { useZonesGrid } from '../hooks/useZonesGrid';
 import { useZoneCaptures } from '../hooks/useZoneCaptures';
 import { useOfflineSync } from '../hooks/useOfflineSync';
 
-// Helper to compute meters moved between successive GPS ticks using Haversine formula
 function getDistanceMeters(lat1, lon1, lat2, lon2) {
   const R = 6371000; 
   const dLat = ((lat2 - lat1) * Math.PI) / 180;
@@ -38,35 +36,25 @@ export default function MapPage() {
   const auth = useAuth();
   const user = auth?.session?.user;
 
-  // 1. Initialize the background syncing engine to auto-flush offline queues
   useOfflineSync();
 
-  // 2. Fetch the full list of 5,212 game cells from local IndexedDB cache/Supabase
-  const { grid, loading: gridLoading } = useZonesGrid();
+  const { grid } = useZonesGrid();
 
-  // 3. Initialize the Capture engine to manage optimistic claims
   const { ownedZones, evaluateCapture } = useZoneCaptures();
 
-  // Fetch logged-in user profile statistics (for customized daily goals target)
   const { stats } = useProfileStats(user?.id);
   const dailyTargetM = stats?.dailyTargetM || 5000; 
 
   const { isLocked, lockScreen, unlockScreen } = usePocketLock();
   
-  // Destructure active run tracking statistics and triggers
   const { duration, distance, calories, sessionActive, sessionId, addTrackedDistance } = useRunSession();
 
-  // Compute daily goal metrics dynamically using custom target
   const { progressPct, currentValueKm, targetValueKm } = useDailyGoal(distance, dailyTargetM);
 
-  // Active coordinates tracking ref
   const lastPositionRef = useRef(null);
 
-  // 4. Geolocation Sensor: Evaluates distance traveled and sector captures on every precise tick
   const { position, gpsStatus, errorMsg } = useGPS((coords) => {
-    // Only process gameplay mechanics if a run session is actively running
     if (sessionActive) {
-      // A. Accumulate running distance
       if (lastPositionRef.current) {
         const metersMoved = getDistanceMeters(
           lastPositionRef.current.lat,
@@ -77,7 +65,6 @@ export default function MapPage() {
         addTrackedDistance(metersMoved);
       }
 
-      // B. Evaluate territory captures against the 5,212 grid cells
       if (grid && grid.length > 0) {
         evaluateCapture(coords, grid, sessionId, user?.id);
       }
@@ -85,10 +72,8 @@ export default function MapPage() {
     lastPositionRef.current = coords;
   });
 
-  // Compass Magnetometer Sensor
   const { heading, requestPermission: requestCompassPermission } = useCompass();
 
-  // Hold-to-Lock progress state
   const [holdProgress, setHoldProgress] = useState(0);
   const holdIntervalRef = useRef(null);
 
@@ -132,7 +117,6 @@ export default function MapPage() {
         </div>
 
         <div className="flex-1 p-6 flex flex-col gap-6">
-          {/* GoalRing dynamically bound to progress metrics */}
           <div className="flex justify-center bg-zinc-900/10 border border-zinc-900 rounded-xl p-4">
             <GoalRing 
               progressPct={progressPct} 
@@ -162,7 +146,6 @@ export default function MapPage() {
         </div>
 
         <div className="border-t border-zinc-900 p-4 bg-zinc-950">
-          {/* Pass GPS status to gate session actions */}
           <FieldHUD 
             followPlayer={followPlayer} 
             setFollowPlayer={setFollowPlayer}
@@ -177,16 +160,14 @@ export default function MapPage() {
 
       {/* 2. Map Canvas (Takes 65% of mobile viewport, or 100% of desktop viewport) */}
       <div className="flex-1 h-[65%] md:h-full relative w-full">
-        {/* Pass loaded grid and active owned zones directly to MapCanvas */}
         <MapCanvas 
           position={position} 
-          zones={grid} // Complete active coordinate polygons
-          ownedZones={ownedZones} // Optimistic claim indexes
+          zones={grid} 
+          ownedZones={ownedZones} 
           following={followPlayer}
           heading={heading} 
         />
 
-        {/* Global GPS Acquiring Overlay (80m threshold blocker) */}
         {gpsStatus !== 'locked' && (
           <div className="absolute inset-0 z-[1000] bg-zinc-950/80 backdrop-blur-sm flex flex-col items-center justify-center p-6 text-center select-none">
             <div className="p-4 bg-amber-950/20 border border-amber-900/30 text-amber-500 rounded-full mb-4 animate-bounce">
@@ -225,10 +206,8 @@ export default function MapPage() {
         />
       )}
 
-      {/* Navigation Menu Component */}
       <DynamicIslandNav />
 
-      {/* Core Auth Modal */}
       <AuthModal />
     </div>
   );
