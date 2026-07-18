@@ -1,6 +1,16 @@
 import { useState, useEffect, useCallback } from 'react';
 import { supabase } from '../lib/supabase';
 
+// Map translates old string-based meta fields safely to integer IDs
+const FACTION_MAP = {
+  'lumbini_guardians': 1,
+  'devdaha_dynasty': 2,
+  'tilaurakot_sentinels': 3,
+  'siddharth_force': 4,
+  'manimukunda_warriors': 5,
+  '1': 1, '2': 2, '3': 3, '4': 4, '5': 5
+};
+
 export function useOfflineSync() {
   const [isOnline, setIsOnline] = useState(navigator.onLine);
   const [syncing, setSyncing] = useState(false);
@@ -25,8 +35,6 @@ export function useOfflineSync() {
         // ==========================================
         // 1. SYNCHRONIZE PENDING TRACES (SESSIONS)
         // ==========================================
-        
-        // Phase A: Read-Only (Retrieve unsynced sessions)
         const traceReadTx = db.transaction('traces', 'readonly');
         const traceReadStore = traceReadTx.objectStore('traces');
         
@@ -36,7 +44,6 @@ export function useOfflineSync() {
           req.onerror = () => res([]);
         });
 
-        // Phase B: Network (Send data to Supabase asynchronously)
         const succeededTraceIds = [];
         for (const trace of unsyncedTraces) {
           const { error: sessionErr } = await supabase
@@ -57,7 +64,6 @@ export function useOfflineSync() {
           }
         }
 
-        // Phase C: Write-Only (Open a fresh write transaction to delete succeeded rows)
         if (succeededTraceIds.length > 0) {
           const traceWriteTx = db.transaction('traces', 'readwrite');
           const traceWriteStore = traceWriteTx.objectStore('traces');
@@ -69,8 +75,6 @@ export function useOfflineSync() {
         // ==========================================
         // 2. SYNCHRONIZE CAPTURES (ZONES)
         // ==========================================
-        
-        // Phase A: Read-Only (Retrieve unsynced captures)
         const capReadTx = db.transaction('captures', 'readonly');
         const capReadStore = capReadTx.objectStore('captures');
 
@@ -80,7 +84,6 @@ export function useOfflineSync() {
           req.onerror = () => res([]);
         });
 
-        // Phase B: Network (Evaluate chronological conflict resolution)
         const succeededCapIds = [];
         for (const cap of unsyncedCaps) {
           const { data: serverZone, error: zoneErr } = await supabase
@@ -95,12 +98,17 @@ export function useOfflineSync() {
 
             // First physical arrival wins: Sync if local stamp is older than current server stamp
             if (!serverZone?.captured_at || localCapturedAt < serverCapturedAt) {
+              const rawFaction = session?.user?.user_metadata?.faction_id;
+              
+              // Translate legacy text fields to valid integer IDs
+              const factionId = FACTION_MAP[rawFaction] || Number(rawFaction) || 1;
+
               const { error: claimErr } = await supabase
                 .from('zones')
                 .update({
                   owner_id: cap.owner_id,
                   captured_at: cap.captured_at,
-                  faction_id: session?.user?.user_metadata?.faction_id || 1 
+                  faction_id: factionId
                 })
                 .eq('id', cap.zone_id);
 
@@ -122,13 +130,11 @@ export function useOfflineSync() {
                 console.error('Failed to update zone claim in database:', claimErr.message);
               }
             } else {
-              // Local claim lost conflict (older claim exists), remove from local queue anyway
               succeededCapIds.push(cap.zone_id);
             }
           }
         }
 
-        // Phase C: Write-Only (Open a fresh write transaction to delete succeeded captures)
         if (succeededCapIds.length > 0) {
           const capWriteTx = db.transaction('captures', 'readwrite');
           const capWriteStore = capWriteTx.objectStore('captures');

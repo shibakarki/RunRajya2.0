@@ -1,5 +1,15 @@
 import { useState, useCallback } from 'react';
-import { supabase } from '../lib/supabase'; // Imported to enable instant database writes
+import { supabase } from '../lib/supabase';
+
+// Map translates old string-based meta fields safely to integer IDs
+const FACTION_MAP = {
+  'lumbini_guardians': 1,
+  'devdaha_dynasty': 2,
+  'tilaurakot_sentinels': 3,
+  'siddharth_force': 4,
+  'manimukunda_warriors': 5,
+  '1': 1, '2': 2, '3': 3, '4': 4, '5': 5
+};
 
 // Ray-casting algorithm to evaluate coordinate inclusion inside polygon bounds
 function isPointInPolygon(point, polygon) {
@@ -93,7 +103,10 @@ export function useZoneCaptures() {
       if (navigator.onLine) {
         try {
           const { data: { session } } = await supabase.auth.getSession();
-          const factionId = session?.user?.user_metadata?.faction_id || 1;
+          const rawFaction = session?.user?.user_metadata?.faction_id;
+          
+          // Translate legacy text fields to valid integer IDs
+          const factionId = FACTION_MAP[rawFaction] || Number(rawFaction) || 1;
 
           // A. Update the zone ownership details instantly
           const { error: claimErr } = await supabase
@@ -118,7 +131,6 @@ export function useZoneCaptures() {
             if (!auditErr) {
               synced = true;
               
-              // Update optimistic UI state to indicate successful database sync
               setOwnedZones((prev) => ({
                 ...prev,
                 [matchedZone.id]: {
@@ -127,6 +139,8 @@ export function useZoneCaptures() {
                 }
               }));
             }
+          } else {
+            console.error('Instant capture update rejected by database:', claimErr.message);
           }
         } catch (e) {
           console.warn('Instant database write failed. Falling back to offline queue:', e);
@@ -146,7 +160,7 @@ export function useZoneCaptures() {
             session_id: sessionId,
             captured_at: nowISO,
             owner_id: currentUserId,
-            synced: synced // Mapped dynamically based on direct-sync outcome
+            synced: synced 
           });
         };
       } catch (err) {
