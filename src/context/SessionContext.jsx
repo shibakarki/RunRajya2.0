@@ -1,4 +1,4 @@
-import React, { createContext, useState, useEffect, useRef } from 'react';
+import React, { createContext, useState, useEffect, useRef, useContext } from 'react';
 import { useCalorieCounter } from '../hooks/useCalorieCounter';
 
 export const SessionContext = createContext(null);
@@ -19,7 +19,7 @@ export function SessionProvider({ children }) {
 
   const trackerIntervalRef = useRef(null);
 
-  // Calculates metric parameters dynamically via the calorie counter hook
+  // Calculates calorie burn rates dynamically
   const { calories } = useCalorieCounter(distance, duration);
 
   // Hot recovery on mount
@@ -79,7 +79,6 @@ export function SessionProvider({ children }) {
   const endSession = () => {
     setSessionActive(false);
     
-    // Queue final session telemetry stats into IndexedDB traces sync queue
     try {
       const request = indexedDB.open('RunRajyaOfflineDB', 2);
       request.onsuccess = () => {
@@ -124,4 +123,15 @@ export function SessionProvider({ children }) {
       {children}
     </SessionContext.Provider>
   );
+}
+
+/**
+ * useRunSession – consumes the global session tracking context.
+ */
+export function useRunSession() {
+  const context = useContext(SessionContext);
+  if (!context) {
+    throw new Error('useRunSession must be used within a SessionProvider.');
+  }
+  return context;
 }
