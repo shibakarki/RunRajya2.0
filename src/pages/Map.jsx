@@ -36,23 +36,30 @@ export default function MapPage() {
   const auth = useAuth();
   const user = auth?.session?.user;
 
+  // 1. Initialize background sync loop
   useOfflineSync();
 
-  const { grid } = useZonesGrid();
+  // 2. Fetch the 5,212 cells from database/cache
+  const { grid, loading: gridLoading } = useZonesGrid();
 
+  // 3. Initialize capture handler
   const { ownedZones, evaluateCapture } = useZoneCaptures();
 
+  // Fetch logged-in user profile statistics (for customized daily goals target)
   const { stats } = useProfileStats(user?.id);
   const dailyTargetM = stats?.dailyTargetM || 5000; 
 
   const { isLocked, lockScreen, unlockScreen } = usePocketLock();
   
+  // Destructure active run tracking statistics
   const { duration, distance, calories, sessionActive, sessionId, addTrackedDistance } = useRunSession();
 
+  // Compute daily goal metrics dynamically using custom target
   const { progressPct, currentValueKm, targetValueKm } = useDailyGoal(distance, dailyTargetM);
 
   const lastPositionRef = useRef(null);
 
+  // 4. Geolocation Sensor: Evaluates distance traveled and sector captures on every physical movement
   const { position, gpsStatus, errorMsg } = useGPS((coords) => {
     if (sessionActive) {
       if (lastPositionRef.current) {
@@ -72,6 +79,9 @@ export default function MapPage() {
     lastPositionRef.current = coords;
   });
 
+  // 5. REACTIVE INSTANT CAPTURE:
+  // Evaluates a capture instantly the exact second the session turns active,
+  // bypassing the need to move physically to trigger the first zone capture.
   useEffect(() => {
     if (sessionActive && position && grid && grid.length > 0 && user?.id) {
       console.log('Session activated. Executing initial zone capture check...');
@@ -79,11 +89,14 @@ export default function MapPage() {
     }
   }, [sessionActive, position, grid, sessionId, user?.id, evaluateCapture]);
 
+  // Compass Magnetometer Sensor
   const { heading, requestPermission: requestCompassPermission } = useCompass();
 
+  // Hold-to-Lock progress state
   const [holdProgress, setHoldProgress] = useState(0);
   const holdIntervalRef = useRef(null);
 
+  // Activates the orientation permission on the first screen tap
   const handlePageClick = async () => {
     if (requestCompassPermission) {
       await requestCompassPermission();
@@ -121,7 +134,7 @@ export default function MapPage() {
 
   return (
     <div 
-      onClick={handlePageClick} 
+      onClick={handlePageClick} // Captures first tap to authorize compass orientation
       className="w-full h-[100dvh] flex flex-col md:flex-row bg-zinc-950 text-white overflow-hidden relative md:pt-16"
     >
       
@@ -133,6 +146,7 @@ export default function MapPage() {
         </div>
 
         <div className="flex-1 p-6 flex flex-col gap-6">
+          {/* GoalRing dynamically bound to progress metrics */}
           <div className="flex justify-center bg-zinc-900/10 border border-zinc-900 rounded-xl p-4">
             <GoalRing 
               progressPct={progressPct} 
@@ -155,6 +169,7 @@ export default function MapPage() {
               )}
             </div>
             
+            {/* Live Database Diagnostics Row */}
             <div className="flex justify-between items-center text-xs">
               <span className="text-zinc-500">Sectors Loaded:</span>
               <span className="text-zinc-300 font-mono font-bold">
@@ -170,6 +185,7 @@ export default function MapPage() {
         </div>
 
         <div className="border-t border-zinc-900 p-4 bg-zinc-950">
+          {/* Pass GPS status to gate session actions */}
           <FieldHUD 
             followPlayer={followPlayer} 
             setFollowPlayer={setFollowPlayer}
@@ -190,8 +206,8 @@ export default function MapPage() {
           ownedZones={ownedZones} 
           following={followPlayer}
           heading={heading} 
-          currentUserId={user?.id} 
-          currentUserFactionId={stats?.factionId} // Pass down player faction ID
+          currentUserId={user?.id} // Pass currentUserId to paint owned zones in faction colors
+          currentUserFactionId={stats?.factionId}
         />
 
         {gpsStatus !== 'locked' && (

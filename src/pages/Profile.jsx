@@ -201,7 +201,7 @@ export default function Profile() {
                   <select
                     value={editFaction}
                     onChange={(e) => {
-                      setEditFaction(parseInt(e.target.value, 10)); 
+                      setEditFaction(parseInt(e.target.value, 10)); // Parse to integer
                       setFactionAlertConfirmed(false); 
                     }}
                     className="w-full px-3 py-2 bg-zinc-950 border border-zinc-800 rounded-lg text-sm text-zinc-100 focus:outline-none"
@@ -213,6 +213,7 @@ export default function Profile() {
                 </div>
               </div>
 
+              {/* Secure warnings display on Faction changes */}
               {factionChanged && (
                 <div className="p-4 bg-red-950/40 border border-red-900/50 rounded-xl flex flex-col gap-3">
                   <div className="flex gap-2 text-red-400">
