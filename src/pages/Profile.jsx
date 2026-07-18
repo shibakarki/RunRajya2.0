@@ -21,7 +21,7 @@ export default function Profile() {
   const { stats, loading: statsLoading, error: statsErr } = useProfileStats(user?.id);
   
   // Leaderboards Hooks (Local and Global)
-  const [activeTab, setActiveTab] = useState('local'); 
+  const [activeTab, setActiveTab] = useState('local'); // 'local' | 'global'
   const { rankings: localRankings, loading: localLoading, error: localErr } = useLeaderboard('rupandehi');
   const { isGlobalComingSoon } = useLeaderboard('global');
 
@@ -32,7 +32,7 @@ export default function Profile() {
   const [isEditing, setIsEditing] = useState(false);
   const [editName, setEditName] = useState('');
   const [editFaction, setEditFaction] = useState(1);
-  const [editTargetKm, setEditTargetKm] = useState(5.0); // Track customizable target km
+  const [editTargetKm, setEditTargetKm] = useState(5.0); 
   const [factionAlertConfirmed, setFactionAlertConfirmed] = useState(false);
 
   // Dynamic fallback: use user session metadata name if database record is empty
@@ -40,7 +40,9 @@ export default function Profile() {
     ? user.user_metadata.full_name
     : stats?.username || 'Explorer';
 
-  // Sync editing fields with database profiles values when editing initiates
+  // HOOKS RULE CORRECTION:
+  // Moved this useEffect to the top (above conditional returns) to ensure 
+  // it is executed in the exact same order on every render pass.
   useEffect(() => {
     if (stats) {
       const defaultName = stats.username === 'Explorer' && user?.user_metadata?.full_name
@@ -48,7 +50,7 @@ export default function Profile() {
         : stats.username;
       setEditName(defaultName);
       setEditFaction(stats.factionId);
-      setEditTargetKm(Number((stats.dailyTargetM / 1000).toFixed(1))); // Set baseline target
+      setEditTargetKm(Number((stats.dailyTargetM / 1000).toFixed(1))); 
     }
   }, [stats, isEditing, user]);
 
@@ -65,7 +67,7 @@ export default function Profile() {
   if (!user) {
     return (
       <div className="w-full h-full min-h-screen bg-zinc-950 text-white flex flex-col items-center justify-center p-6 select-none relative">
-        <div className="max-w-md w-full text-center border border-zinc-900 bg-zinc-900/20 p-8 rounded-2xl flex flex-col items-center gap-4">
+        <div className="max-w-md w-full text-center border border-zinc-900 bg-zinc-950 p-8 rounded-2xl flex flex-col items-center gap-4">
           <div className="p-3 bg-amber-950/30 border border-amber-900/50 text-amber-500 rounded-full animate-pulse">
             <svg className="w-8 h-8" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" />
@@ -112,7 +114,7 @@ export default function Profile() {
     const response = await updateProfile(user.id, {
       name: editName,
       newFactionId: factionChanged ? parseInt(editFaction, 10) : undefined,
-      dailyTargetM: Math.round(editTargetKm * 1000) // Convert km to meters
+      dailyTargetM: Math.round(editTargetKm * 1000) 
     });
 
     if (response.success) {
@@ -201,7 +203,7 @@ export default function Profile() {
                   <select
                     value={editFaction}
                     onChange={(e) => {
-                      setEditFaction(parseInt(e.target.value, 10)); // Parse to integer
+                      setEditFaction(parseInt(e.target.value, 10)); 
                       setFactionAlertConfirmed(false); 
                     }}
                     className="w-full px-3 py-2 bg-zinc-950 border border-zinc-800 rounded-lg text-sm text-zinc-100 focus:outline-none"
@@ -213,7 +215,6 @@ export default function Profile() {
                 </div>
               </div>
 
-              {/* Secure warnings display on Faction changes */}
               {factionChanged && (
                 <div className="p-4 bg-red-950/40 border border-red-900/50 rounded-xl flex flex-col gap-3">
                   <div className="flex gap-2 text-red-400">
