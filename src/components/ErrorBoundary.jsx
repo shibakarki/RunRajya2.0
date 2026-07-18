@@ -7,29 +7,23 @@ export default class ErrorBoundary extends React.Component {
   }
 
   static getDerivedStateFromError(error) {
-    // Update state so the next render will show the fallback UI
     return { hasError: true, error };
   }
 
   componentDidCatch(error, errorInfo) {
-    // Log the error to your analytics or console
     console.error('Captured unhandled runtime exception:', error, errorInfo);
   }
 
   handleHardReset = () => {
     try {
-      // 1. Clear local storage configurations
       localStorage.clear();
       sessionStorage.clear();
-
-      // 2. Wipe IndexedDB database caches to resolve local corruption
       const deleteRequest = indexedDB.deleteDatabase('RunRajyaOfflineDB');
-      
       deleteRequest.onsuccess = () => {
-        window.location.href = '/'; // Hard redirect to clear memory
+        window.location.href = '/';
       };
       deleteRequest.onerror = () => {
-        window.location.reload(); // Fallback reload
+        window.location.reload();
       };
     } catch (e) {
       window.location.reload();
@@ -38,7 +32,6 @@ export default class ErrorBoundary extends React.Component {
 
   render() {
     if (this.state.hasError) {
-      // High-contrast fallback UI aligned with the RunRajya tactical theme
       return (
         <div className="w-full min-h-screen bg-zinc-950 text-white flex flex-col items-center justify-center p-6 select-none font-sans">
           <div className="max-w-md w-full text-center border border-red-900/40 bg-red-950/5 p-8 rounded-2xl flex flex-col items-center gap-4 shadow-2xl">
@@ -54,11 +47,22 @@ export default class ErrorBoundary extends React.Component {
               An unhandled exception occurred during application initialization. This is commonly caused by corrupted local session tokens or temporary database routing issues.
             </p>
 
+            {/* 
+              UPGRADED DIAGNOSTICS VIEWER:
+              Explicitly extracts and prints the unminified error name, message, and full stack trace 
+              directly on the screen so it is visible immediately.
+            */}
             {this.state.error && (
-              <div className="w-full p-3 bg-zinc-950 border border-zinc-900 rounded-lg text-left overflow-x-auto max-h-24">
-                <code className="text-[10px] font-mono text-red-400 whitespace-pre-wrap break-all leading-normal">
-                  {this.state.error.toString()}
-                </code>
+              <div className="w-full p-4 bg-zinc-950 border border-zinc-900 rounded-lg text-left overflow-x-auto max-h-48 flex flex-col gap-1 select-all">
+                <span className="text-[10px] font-mono text-zinc-500 uppercase tracking-wider">Error Details:</span>
+                <span className="text-[11px] font-mono font-bold text-red-400">
+                  {this.state.error.name || 'Error'}: {this.state.error.message || 'No explicit message.'}
+                </span>
+                {this.state.error.stack && (
+                  <pre className="text-[9px] font-mono text-zinc-400 mt-2 whitespace-pre-wrap break-all leading-relaxed">
+                    {this.state.error.stack}
+                  </pre>
+                )}
               </div>
             )}
 
