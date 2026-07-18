@@ -46,10 +46,7 @@ export default function DynamicIslandNav() {
 
   return (
     <>
-      {/* 
-        1. DESKTOP VIEW (NavMenu)
-        z-index set to z-[1000] to draw above standard Leaflet overlay panes.
-      */}
+      {/* 1. DESKTOP VIEW (NavMenu) */}
       <nav className="hidden md:flex fixed top-0 left-0 right-0 h-16 bg-zinc-950/80 backdrop-blur-md border-b border-zinc-900 z-[1000] items-center justify-between px-8 select-none">
         
         <div className="flex items-center gap-4">
@@ -61,7 +58,7 @@ export default function DynamicIslandNav() {
           <div className={`flex items-center gap-1.5 px-2 py-0.5 rounded border text-[9px] font-mono uppercase ${
             networkOnline ? 'border-emerald-900/40 text-emerald-500 bg-emerald-950/10' : 'border-red-900/40 text-red-500 bg-red-950/10'
           }`}>
-            <span className={`w-1 h-1 rounded-full ${networkOnline ? 'bg-emerald-500 animate-pulse' : 'bg-red-500'}`} />
+            <span className={`w-1 h-1 rounded-full ${networkOnline ? 'bg-emerald-500' : 'bg-red-500'}`} />
             <span>{networkOnline ? 'Sync Active' : 'Offline Mode'}</span>
           </div>
         </div>
@@ -116,11 +113,7 @@ export default function DynamicIslandNav() {
         </div>
       </nav>
 
-      {/* 
-        2. MOBILE VIEW (Dynamic Island)
-        Positioned fixed at the top center to mimic an iPhone notch.
-        z-index is locked to z-[1001] to float cleanly over map layers.
-      */}
+      {/* 2. MOBILE VIEW (Dynamic Island) */}
       <div className="md:hidden fixed top-3 left-1/2 -translate-x-1/2 z-[1001] flex flex-col items-center select-none">
         <div 
           onClick={() => setIsExpanded(prev => !prev)}
