@@ -26,14 +26,21 @@ export default function ZoneLayer({ zones = [], ownedZones = {}, position, curre
   // Calculates squared distance from player position to cell center for fast sorting
   const getDistanceSquared = (zone) => {
     try {
-      // Defensive check: handle stringified database objects safely
+      // Defensive check: handle stringified database JSONB objects safely
       const coords = typeof zone.boundary === 'string' ? JSON.parse(zone.boundary) : zone.boundary;
       if (!Array.isArray(coords) || coords.length === 0) return Infinity;
       
       let sumLat = 0, sumLng = 0;
       coords.forEach((p) => {
-        sumLat += p.lat !== undefined ? p.lat : (p[0] !== undefined ? p[0] : 0);
-        sumLng += p.lng !== undefined ? p.lng : (p[1] !== undefined ? p[1] : 0);
+        if (p && typeof p === 'object') {
+          const latVal = p.lat !== undefined ? p.lat : p[0];
+          const lngVal = p.lng !== undefined ? p.lng : p[1];
+          sumLat += Number(latVal) || 0;
+          sumLng += Number(lngVal) || 0;
+        } else if (Array.isArray(p)) {
+          sumLat += Number(p[0]) || 0;
+          sumLng += Number(p[1]) || 0;
+        }
       });
       const centerLat = sumLat / coords.length;
       const centerLng = sumLng / coords.length;
@@ -42,7 +49,6 @@ export default function ZoneLayer({ zones = [], ownedZones = {}, position, curre
       const dLng = centerLng - position.lng;
       return dLat * dLat + dLng * dLng;
     } catch (e) {
-      console.warn('Error calculating distance for cell:', zone.id, e);
       return Infinity;
     }
   };
@@ -55,7 +61,7 @@ export default function ZoneLayer({ zones = [], ownedZones = {}, position, curre
   return (
     <>
       {localGrid.map((zone) => {
-        // Defensive check: handle stringified database objects safely
+        // Defensive check: handle stringified database JSONB objects safely
         const coords = typeof zone.boundary === 'string' ? JSON.parse(zone.boundary) : zone.boundary;
         if (!Array.isArray(coords)) return null;
 
