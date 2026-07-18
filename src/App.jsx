@@ -1,23 +1,31 @@
-import { Routes, Route } from 'react-router-dom';
-import Home from './pages/Home.jsx';
-import Map from './pages/Map.jsx';
-import Profile from './pages/Profile.jsx';
-import DynamicIslandNav from './components/DynamicIslandNav.jsx';
-import AuthModal from './components/AuthModal.jsx';
+import React from 'react';
+import { BrowserRouter as Router, Routes, Route } from 'react-router-dom';
+import { AuthProvider } from './context/AuthContext';
+import { SessionProvider } from './context/SessionContext';
+import DynamicIslandNav from './components/DynamicIslandNav';
+import Home from './pages/Home';
+import MapPage from './pages/Map';
+import Profile from './pages/Profile';
 
-// App is the root router. It owns AuthModal visibility so any page
-// can trigger it via context/useAuth rather than each page managing
-// its own modal state.
 export default function App() {
   return (
-    <>
-      <Routes>
-        <Route path="/" element={<Home />} />
-        <Route path="/map" element={<Map />} />
-        <Route path="/profile" element={<Profile />} />
-      </Routes>
-      <DynamicIslandNav />
-      <AuthModal />
-    </>
+    <AuthProvider>
+      <SessionProvider>
+        <Router>
+          {/* 
+            Mounting the navigation menu globally ensures the header (on desktop) 
+            and the Dynamic Island pill (on mobile) persist across pages
+            without re-rendering or interrupting active sensor/run states.
+          */}
+          <DynamicIslandNav />
+          
+          <Routes>
+            <Route path="/" element={<Home />} />
+            <Route path="/map" element={<MapPage />} />
+            <Route path="/profile" element={<Profile />} />
+          </Routes>
+        </Router>
+      </SessionProvider>
+    </AuthProvider>
   );
 }

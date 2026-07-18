@@ -115,7 +115,8 @@ export default function MapCanvas({
   ownedZones = {}, 
   following = true,
   heading = 0,
-  currentUserId // Added prop
+  currentUserId,
+  currentUserFactionId // Added prop
 }) {
   const [boundary, setBoundary] = useState([]);
   const center = position ? [position.lat, position.lng] : FALLBACK_CENTER;
@@ -161,12 +162,12 @@ export default function MapCanvas({
           />
         )}
 
-        {/* Forward currentUserId down to evaluate already captured territories */}
         <ZoneLayer 
           zones={zones} 
           ownedZones={ownedZones} 
           position={position} 
-          currentUserId={currentUserId} 
+          currentUserId={currentUserId}
+          currentUserFactionId={currentUserFactionId} // Passed down to direct-paint cells
         />
 
         {position && (
