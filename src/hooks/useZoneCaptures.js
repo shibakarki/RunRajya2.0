@@ -1,4 +1,5 @@
 import { useState, useCallback } from 'react';
+import { supabase } from '../lib/supabase'; // Imported to enable instant database writes
 
 // Ray-casting algorithm to evaluate coordinate inclusion inside polygon bounds
 function isPointInPolygon(point, polygon) {
@@ -46,7 +47,7 @@ export function useZoneCaptures() {
       isPointInPolygon(currentPosition, zone.boundary)
     );
 
-    // B. Second Check (Gauranteed Fallback): Find closest cell center and capture if within 300m
+    // B. Second Check (Guaranteed Fallback): Find closest cell center and capture if within 300m
     if (!matchedZone) {
       let closestZone = null;
       let minDistance = Infinity;
@@ -54,7 +55,6 @@ export function useZoneCaptures() {
       activeGrid.forEach((zone) => {
         if (!zone.boundary || zone.boundary.length === 0) return;
         
-        // Calculate cell center
         let sumLat = 0, sumLng = 0;
         zone.boundary.forEach((p) => {
           sumLat += p.lat ?? p[0];
@@ -78,8 +78,9 @@ export function useZoneCaptures() {
 
     if (matchedZone && !ownedZones[matchedZone.id]) {
       const nowISO = new Date().toISOString();
+      let synced = false;
 
-      // Paint territory color instantly in UI
+      // 1. Optimistically paint the territory green in the local UI immediately
       setOwnedZones((prev) => ({
         ...prev,
         [matchedZone.id]: {
@@ -88,7 +89,51 @@ export function useZoneCaptures() {
         }
       }));
 
-      // Queue capture in local IndexedDB store
+      // 2. If online, attempt to save directly and instantly to Supabase
+      if (navigator.onLine) {
+        try {
+          const { data: { session } } = await supabase.auth.getSession();
+          const factionId = session?.user?.user_metadata?.faction_id || 1;
+
+          // A. Update the zone ownership details instantly
+          const { error: claimErr } = await supabase
+            .from('zones')
+            .update({
+              owner_id: currentUserId,
+              captured_at: nowISO,
+              faction_id: factionId
+            })
+            .eq('id', matchedZone.id);
+
+          if (!claimErr) {
+            // B. Log the audit trail record instantly
+            const { error: auditErr } = await supabase
+              .from('captures')
+              .insert({
+                session_id: sessionId,
+                zone_id: matchedZone.id,
+                captured_at: nowISO
+              });
+
+            if (!auditErr) {
+              synced = true;
+              
+              // Update optimistic UI state to indicate successful database sync
+              setOwnedZones((prev) => ({
+                ...prev,
+                [matchedZone.id]: {
+                  capturedAt: nowISO,
+                  synced: true
+                }
+              }));
+            }
+          }
+        } catch (e) {
+          console.warn('Instant database write failed. Falling back to offline queue:', e);
+        }
+      }
+
+      // 3. Always queue/update the capture state in local IndexedDB (RunRajyaOfflineDB v2)
       try {
         const dbRequest = indexedDB.open('RunRajyaOfflineDB', 2);
         dbRequest.onsuccess = () => {
@@ -101,11 +146,11 @@ export function useZoneCaptures() {
             session_id: sessionId,
             captured_at: nowISO,
             owner_id: currentUserId,
-            synced: false
+            synced: synced // Mapped dynamically based on direct-sync outcome
           });
         };
       } catch (err) {
-        console.error('Failed to queue capture inside offline storage:', err);
+        console.error('Failed to update local IndexedDB cache:', err);
       }
 
       return matchedZone;
