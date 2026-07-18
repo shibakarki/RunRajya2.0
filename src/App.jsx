@@ -2,10 +2,10 @@ import React from 'react';
 import { BrowserRouter as Router, Routes, Route } from 'react-router-dom';
 import { AuthProvider } from './context/AuthContext';
 import { SessionProvider } from './context/SessionContext';
-import DynamicIslandNav from './components/DynamicIslandNav.jsx';
-import Home from './pages/Home.jsx';
-import MapPage from './pages/Map.jsx';
-import Profile from './pages/Profile.jsx';
+import DynamicIslandNav from './components/DynamicIslandNav';
+import Home from './pages/Home';
+import MapPage from './pages/Map';
+import Profile from './pages/Profile';
 
 export default function App() {
   return (

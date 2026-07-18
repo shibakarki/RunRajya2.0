@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react';
 import { MapContainer, TileLayer, Marker, Polygon, useMap } from 'react-leaflet';
 import L from 'leaflet';
 import 'leaflet/dist/leaflet.css';
-import ZoneLayer from './ZoneLayer.jsx';
+import ZoneLayer from './ZoneLayer'; // Removed .jsx extension
 
 import rupandehiGeoJson from '../data/rupandehi.json'; 
 
@@ -116,7 +116,7 @@ export default function MapCanvas({
   following = true,
   heading = 0,
   currentUserId,
-  currentUserFactionId // Added prop
+  currentUserFactionId 
 }) {
   const [boundary, setBoundary] = useState([]);
   const center = position ? [position.lat, position.lng] : FALLBACK_CENTER;
@@ -167,7 +167,7 @@ export default function MapCanvas({
           ownedZones={ownedZones} 
           position={position} 
           currentUserId={currentUserId}
-          currentUserFactionId={currentUserFactionId} // Passed down to direct-paint cells
+          currentUserFactionId={currentUserFactionId} 
         />
 
         {position && (
