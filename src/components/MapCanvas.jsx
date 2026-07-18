@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react';
 import { MapContainer, TileLayer, Marker, Polygon, useMap } from 'react-leaflet';
 import L from 'leaflet';
 import 'leaflet/dist/leaflet.css';
-import ZoneLayer from './ZoneLayer'; // Removed .jsx extension
+import ZoneLayer from './ZoneLayer'; // Cleaned extensionless import
 
 import rupandehiGeoJson from '../data/rupandehi.json'; 
 

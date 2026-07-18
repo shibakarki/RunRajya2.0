@@ -33,7 +33,7 @@ export function useCalorieCounter(distanceM = 0, durationS = 0) {
   const kcalPerMin = (met * 3.5 * baselineWeightKg) / 200;
   const kcalPerSec = kcalPerMin / 60;
 
-  const calories = kcalPerSec * durationS; // Renamed to match the return statement below
+  const calories = kcalPerSec * durationS; // Cleaned reference variable
 
   return { 
     calories: Math.round(calories * 10) / 10 
