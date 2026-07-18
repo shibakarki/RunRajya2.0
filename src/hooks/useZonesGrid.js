@@ -1,106 +1,86 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { supabase } from '../lib/supabase';
 
-const DB_NAME = 'RunRajyaOfflineDB';
-const DB_VERSION = 2;
-
-function openDB() {
-  return new Promise((resolve, reject) => {
-    const request = indexedDB.open(DB_NAME, DB_VERSION);
-    request.onupgradeneeded = (e) => {
-      const db = e.target.result;
-      if (!db.objectStoreNames.contains('zones_grid')) {
-        db.createObjectStore('zones_grid', { keyPath: 'id' });
-      }
-      if (!db.objectStoreNames.contains('traces')) {
-        db.createObjectStore('traces', { keyPath: 'id', autoIncrement: true });
-      }
-      if (!db.objectStoreNames.contains('captures')) {
-        db.createObjectStore('captures', { keyPath: 'zone_id' });
-      }
-    };
-    request.onsuccess = () => resolve(request.result);
-    request.onerror = () => reject(request.error);
-  });
+// Helper to calculate approximate distance in meters
+function getDistanceMeters(lat1, lon1, lat2, lon2) {
+  const R = 6371000; 
+  const dLat = ((lat2 - lat1) * Math.PI) / 180;
+  const dLon = ((lon2 - lon1) * Math.PI) / 180;
+  const a =
+    Math.sin(dLat / 2) * Math.sin(dLat / 2) +
+    Math.cos((lat1 * Math.PI) / 180) *
+      Math.cos((lat2 * Math.PI) / 180) *
+      Math.sin(dLon / 2) *
+      Math.sin(dLon / 2);
+  const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+  return R * c;
 }
 
-export function useZonesGrid() {
+/**
+ * useZonesGrid – dynamically loads local grid cells in real-time.
+ * Bypasses local IndexedDB caching and fetches active adjacent zones on-demand.
+ * 
+ * @param {Object} position - Active GPS coordinates { lat, lng }
+ */
+export function useZonesGrid(position) {
   const [grid, setGrid] = useState([]);
-  const [loading, setLoading] = useState(true);
+  const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
 
+  // Track the last position used to query the database to prevent spamming
+  const lastQueryPosRef = useRef(null);
+
   useEffect(() => {
-    async function loadGrid() {
+    if (!position || !position.lat || !position.lng) {
+      return;
+    }
+
+    // Movement Throttle Check:
+    // Only fetch new cells if the user has moved more than 200m from their last queried location
+    if (lastQueryPosRef.current) {
+      const distanceMoved = getDistanceMeters(
+        lastQueryPosRef.current.lat,
+        lastQueryPosRef.current.lng,
+        position.lat,
+        position.lng
+      );
+      if (distanceMoved < 200) {
+        return; // Skip query if movement is minor
+      }
+    }
+
+    async function loadLocalGrid() {
       try {
         setLoading(true);
-        const db = await openDB();
-        
-        const tx = db.transaction('zones_grid', 'readonly');
-        const store = tx.objectStore('zones_grid');
-        
-        const cachedZones = await new Promise((resolve) => {
-          const req = store.getAll();
-          req.onsuccess = () => resolve(req.result || []);
-          req.onerror = () => resolve([]);
-        });
+        setError(null);
 
-        // Self-Healing Cache:
-        // Ensure cache holds at least 4,000 of the 5,212 generated cells before skipping the download
-        if (cachedZones && cachedZones.length >= 4000) {
-          setGrid(cachedZones);
-          setLoading(false);
-          return;
-        }
+        // Bounding Box Range: 0.02 degrees latitude/longitude represents ~2.2km radius
+        const rangeDegrees = 0.02;
 
-        console.log(`Cache incomplete (${cachedZones.length} cells). Initiating paginated database download...`);
-
-        // Multi-page cursor pagination to bypass Supabase's default 1,000-row selection limit
-        let allZones = [];
-        let from = 0;
-        let to = 999;
-        let hasMore = true;
-
-        while (hasMore) {
-          const { data: pageData, error: fetchError } = await supabase
-            .from('zones')
-            .select('id, boundary, owner_id, faction_id, captured_at')
-            .range(from, to); // Explicitly request segments of 1,000 rows
-
-          if (fetchError) throw fetchError;
-
-          if (pageData && pageData.length > 0) {
-            allZones = [...allZones, ...pageData];
-            from += 1000;
-            to += 1000;
-          } else {
-            hasMore = false;
+        // Call our Supabase RPC function to fetch only local adjacent zones
+        const { data: localZones, error: fetchError } = await supabase.rpc(
+          'get_local_zones',
+          {
+            user_lat: position.lat,
+            user_lng: position.lng,
+            range_deg: rangeDegrees
           }
-        }
+        );
 
-        console.log(`Download finished. Synced ${allZones.length} zones successfully.`);
+        if (fetchError) throw fetchError;
 
-        if (allZones.length > 0) {
-          // Open fresh transaction to repair local IndexedDB cache
-          const writeTx = db.transaction('zones_grid', 'readwrite');
-          const writeStore = writeTx.objectStore('zones_grid');
-          
-          writeStore.clear();
-
-          allZones.forEach((zone) => {
-            writeStore.put(zone);
-          });
-          setGrid(allZones);
-        }
+        setGrid(localZones || []);
+        lastQueryPosRef.current = position; // Lock new position reference
       } catch (err) {
-        console.error('Failed to initialize zones grid:', err);
-        setError(err.message || 'Error loading zones layout.');
+        console.error('Failed to load local zones from database:', err);
+        setError(err.message || 'Error loading local zones.');
       } finally {
         setLoading(false);
       }
     }
 
-    loadGrid();
-  }, []);
+    loadLocalGrid();
+  }, [position]);
 
   return { grid, loading, error };
 }

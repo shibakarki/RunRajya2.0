@@ -13,7 +13,7 @@ import { useCompass } from '../hooks/useCompass';
 import { useProfileStats } from '../hooks/useProfileStats';
 import { useAuth } from '../context/AuthContext';
 
-import { useZonesGrid } from '../hooks/useZonesGrid';
+import { useZonesGrid } from '../hooks/useZonesGrid'; // Dynamic on-demand loader
 import { useZoneCaptures } from '../hooks/useZoneCaptures';
 import { useOfflineSync } from '../hooks/useOfflineSync';
 
@@ -27,7 +27,7 @@ function getDistanceMeters(lat1, lon1, lat2, lon2) {
       Math.cos((lat2 * Math.PI) / 180) *
       Math.sin(dLon / 2) *
       Math.sin(dLon / 2);
-  const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+  const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1–a));
   return R * c;
 }
 
@@ -36,30 +36,11 @@ export default function MapPage() {
   const auth = useAuth();
   const user = auth?.session?.user;
 
-  // 1. Initialize background sync loop
   useOfflineSync();
-
-  // 2. Fetch the 5,212 cells from database/cache
-  const { grid, loading: gridLoading } = useZonesGrid();
-
-  // 3. Initialize capture handler
-  const { ownedZones, evaluateCapture } = useZoneCaptures();
-
-  // Fetch logged-in user profile statistics (for customized daily goals target)
-  const { stats } = useProfileStats(user?.id);
-  const dailyTargetM = stats?.dailyTargetM || 5000; 
-
-  const { isLocked, lockScreen, unlockScreen } = usePocketLock();
-  
-  // Destructure active run tracking statistics
-  const { duration, distance, calories, sessionActive, sessionId, addTrackedDistance } = useRunSession();
-
-  // Compute daily goal metrics dynamically using custom target
-  const { progressPct, currentValueKm, targetValueKm } = useDailyGoal(distance, dailyTargetM);
 
   const lastPositionRef = useRef(null);
 
-  // 4. Geolocation Sensor: Evaluates distance traveled and sector captures on every physical movement
+  // 1. Geolocation Sensor: Evaluates distance traveled and sector captures on every physical movement
   const { position, gpsStatus, errorMsg } = useGPS((coords) => {
     if (sessionActive) {
       if (lastPositionRef.current) {
@@ -79,7 +60,25 @@ export default function MapPage() {
     lastPositionRef.current = coords;
   });
 
-  // 5. REACTIVE INSTANT CAPTURE:
+  // 2. Fetch adjacent zones in real-time from Supabase based on player's active position
+  const { grid, loading: gridLoading } = useZonesGrid(position);
+
+  // 3. Initialize capture handler
+  const { ownedZones, evaluateCapture } = useZoneCaptures();
+
+  // Fetch logged-in user profile statistics (for customized daily goals target)
+  const { stats } = useProfileStats(user?.id);
+  const dailyTargetM = stats?.dailyTargetM || 5000; 
+
+  const { isLocked, lockScreen, unlockScreen } = usePocketLock();
+  
+  // Destructure active run tracking statistics
+  const { duration, distance, calories, sessionActive, sessionId, addTrackedDistance } = useRunSession();
+
+  // Compute daily goal metrics dynamically using custom target
+  const { progressPct, currentValueKm, targetValueKm } = useDailyGoal(distance, dailyTargetM);
+
+  // 4. REACTIVE INSTANT CAPTURE:
   // Evaluates a capture instantly the exact second the session turns active,
   // bypassing the need to move physically to trigger the first zone capture.
   useEffect(() => {
@@ -171,9 +170,9 @@ export default function MapPage() {
             
             {/* Live Database Diagnostics Row */}
             <div className="flex justify-between items-center text-xs">
-              <span className="text-zinc-500">Sectors Loaded:</span>
+              <span className="text-zinc-500">Local Sectors Loaded:</span>
               <span className="text-zinc-300 font-mono font-bold">
-                {gridLoading ? 'Loading Grid...' : `${grid?.length || 0} cells`}
+                {gridLoading ? 'Syncing...' : `${grid?.length || 0} cells`}
               </span>
             </div>
 
@@ -200,10 +199,11 @@ export default function MapPage() {
 
       {/* 2. Map Canvas (Takes 65% of mobile viewport, or 100% of desktop viewport) */}
       <div className="flex-1 h-[65%] md:h-full relative w-full">
+        {/* Pass loaded grid and active owned zones directly to MapCanvas */}
         <MapCanvas 
           position={position} 
-          zones={grid} 
-          ownedZones={ownedZones} 
+          zones={grid} // Complete active coordinate polygons
+          ownedZones={ownedZones} // Optimistic claim indexes
           following={followPlayer}
           heading={heading} 
           currentUserId={user?.id} // Pass currentUserId to paint owned zones in faction colors
