@@ -1,15 +1,6 @@
-import React, { createContext, useState, useEffect, useRef, useContext } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
+import { SessionContext } from './SessionContextCore'; // Imported from core source
 import { useCalorieCounter } from '../hooks/useCalorieCounter';
-
-export const SessionContext = createContext(null);
-
-function generateUUID() {
-  return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, (c) => {
-    const r = (Math.random() * 16) | 0;
-    const v = c === 'x' ? r : (r & 0x3) | 0x8;
-    return v.toString(16);
-  });
-}
 
 export function SessionProvider({ children }) {
   const [sessionActive, setSessionActive] = useState(false);
@@ -123,15 +114,4 @@ export function SessionProvider({ children }) {
       {children}
     </SessionContext.Provider>
   );
-}
-
-/**
- * useRunSession – consumes the global session tracking context.
- */
-export function useRunSession() {
-  const context = useContext(SessionContext);
-  if (!context) {
-    throw new Error('useRunSession must be used within a SessionProvider.');
-  }
-  return context;
 }
