@@ -114,7 +114,8 @@ export default function MapCanvas({
   zones = [], 
   ownedZones = {}, 
   following = true,
-  heading = 0 
+  heading = 0,
+  currentUserId // Added prop
 }) {
   const [boundary, setBoundary] = useState([]);
   const center = position ? [position.lat, position.lng] : FALLBACK_CENTER;
@@ -160,8 +161,13 @@ export default function MapCanvas({
           />
         )}
 
-        {/* Forward position to the updated ZoneLayer */}
-        <ZoneLayer zones={zones} ownedZones={ownedZones} position={position} />
+        {/* Forward currentUserId down to evaluate already captured territories */}
+        <ZoneLayer 
+          zones={zones} 
+          ownedZones={ownedZones} 
+          position={position} 
+          currentUserId={currentUserId} 
+        />
 
         {position && (
           <Marker 

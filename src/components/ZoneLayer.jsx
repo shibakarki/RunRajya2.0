@@ -17,7 +17,7 @@ const MINE_COLOR = '#22e6b0';
  * Optimized to only render a 5x5 grid (25 closest zones) centered around the player
  * to ensure high-performance rendering on mobile devices.
  */
-export default function ZoneLayer({ zones = [], ownedZones = {}, position }) {
+export default function ZoneLayer({ zones = [], ownedZones = {}, position, currentUserId }) {
   // If no GPS lock is acquired yet, do not render any local grids
   if (!position) {
     return null;
@@ -55,7 +55,8 @@ export default function ZoneLayer({ zones = [], ownedZones = {}, position }) {
           return [p.lat ?? p[0], p.lng ?? p[1]];
         });
 
-        const isMine = !!ownedZones[zone.id];
+        // Safe checks matching both local cache states and database persistent ownership
+        const isMine = !!ownedZones[zone.id] || zone.owner_id === currentUserId;
         const isOwned = isMine || !!zone.owner_id;
         
         const color = isMine

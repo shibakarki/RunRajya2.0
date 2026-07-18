@@ -77,6 +77,13 @@ export default function MapPage() {
   const [holdProgress, setHoldProgress] = useState(0);
   const holdIntervalRef = useRef(null);
 
+  // Activates the orientation permission on the first screen tap
+  const handlePageClick = async () => {
+    if (requestCompassPermission) {
+      await requestCompassPermission();
+    }
+  };
+
   const startLockHold = (e) => {
     e.preventDefault();
     if (holdIntervalRef.current) return;
@@ -107,7 +114,10 @@ export default function MapPage() {
   };
 
   return (
-    <div className="w-full h-[100dvh] flex flex-col md:flex-row bg-zinc-950 text-white overflow-hidden relative md:pt-16">
+    <div 
+      onClick={handlePageClick} // Captures first tap to authorize compass orientation
+      className="w-full h-[100dvh] flex flex-col md:flex-row bg-zinc-950 text-white overflow-hidden relative md:pt-16"
+    >
       
       {/* 1. Desktop Sidebar Overlay Panel */}
       <div className="hidden md:flex md:w-[360px] lg:w-[400px] xl:w-[440px] 2xl:w-[480px] h-full flex-col border-r border-zinc-900 bg-zinc-950 z-10 select-none overflow-y-auto shrink-0">
@@ -166,6 +176,7 @@ export default function MapPage() {
           ownedZones={ownedZones} 
           following={followPlayer}
           heading={heading} 
+          currentUserId={user?.id} // Pass currentUserId to paint owned zones in faction colors
         />
 
         {gpsStatus !== 'locked' && (

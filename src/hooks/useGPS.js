@@ -20,6 +20,12 @@ export function useGPS(onValidPositionUpdate) {
   const [gpsStatus, setGpsStatus] = useState('acquiring'); // 'acquiring' | 'locked' | 'error'
   const [errorMsg, setErrorMsg] = useState(null);
   
+  // Ref stores the latest callback to prevent stale closures inside the watchPosition event
+  const callbackRef = useRef(onValidPositionUpdate);
+  useEffect(() => {
+    callbackRef.current = onValidPositionUpdate;
+  });
+
   const lastPositionRef = useRef(null);
   const lastTimestampRef = useRef(0);
 
@@ -69,8 +75,9 @@ export function useGPS(onValidPositionUpdate) {
         lastPositionRef.current = validCoords;
         lastTimestampRef.current = timestamp;
 
-        if (onValidPositionUpdate) {
-          onValidPositionUpdate(validCoords);
+        // Always invoke the latest mutable reference callback (stale-closure fix)
+        if (callbackRef.current) {
+          callbackRef.current(validCoords);
         }
       },
       (error) => {
@@ -86,7 +93,7 @@ export function useGPS(onValidPositionUpdate) {
     );
 
     return () => navigator.geolocation.clearWatch(watchId);
-  }, [onValidPositionUpdate]);
+  }, []);
 
   return { position, gpsStatus, errorMsg };
 }
