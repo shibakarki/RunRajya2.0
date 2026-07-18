@@ -45,40 +45,56 @@ export function useZonesGrid() {
         });
 
         // Self-Healing Cache:
-        // If local cache is empty, corrupted, or has fewer than 4,000 of the 5,212 cells,
-        // bypass the cache and fetch a fresh complete copy from Supabase to repair it.
+        // Ensure cache holds at least 4,000 of the 5,212 generated cells before skipping the download
         if (cachedZones && cachedZones.length >= 4000) {
           setGrid(cachedZones);
           setLoading(false);
           return;
         }
 
-        console.log(`Cache missing or incomplete (${cachedZones.length} cells). Fetching fresh grid from Supabase...`);
+        console.log(`Cache incomplete (${cachedZones.length} cells). Initiating paginated database download...`);
 
-        // Fetch complete active coordinates from database
-        const { data: remoteZones, error: fetchError } = await supabase
-          .from('zones')
-          .select('id, boundary, owner_id, faction_id, captured_at');
+        // Multi-page cursor pagination to bypass Supabase's default 1,000-row selection limit
+        let allZones = [];
+        let from = 0;
+        let to = 999;
+        let hasMore = true;
 
-        if (fetchError) throw fetchError;
+        while (hasMore) {
+          const { data: pageData, error: fetchError } = await supabase
+            .from('zones')
+            .select('id, boundary, owner_id, faction_id, captured_at')
+            .range(from, to); // Explicitly request segments of 1,000 rows
 
-        if (remoteZones && remoteZones.length > 0) {
-          // Open fresh readwrite transaction to overwrite and repair local cache
+          if (fetchError) throw fetchError;
+
+          if (pageData && pageData.length > 0) {
+            allZones = [...allZones, ...pageData];
+            from += 1000;
+            to += 1000;
+          } else {
+            hasMore = false;
+          }
+        }
+
+        console.log(`Download finished. Synced ${allZones.length} zones successfully.`);
+
+        if (allZones.length > 0) {
+          // Open fresh transaction to repair local IndexedDB cache
           const writeTx = db.transaction('zones_grid', 'readwrite');
           const writeStore = writeTx.objectStore('zones_grid');
           
-          // Clear any corrupt/old rows first
           writeStore.clear();
 
-          remoteZones.forEach((zone) => {
+          allZones.forEach((zone) => {
             writeStore.put(zone);
           });
-          setGrid(remoteZones);
+          setGrid(allZones);
         }
       } catch (err) {
         console.error('Failed to initialize zones grid:', err);
         setError(err.message || 'Error loading zones layout.');
-      } {
+      } finally {
         setLoading(false);
       }
     }
