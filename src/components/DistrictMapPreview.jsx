@@ -1,5 +1,15 @@
 import React, { useState, useEffect } from 'react';
+
+// Import your precise Rupandehi boundary data
 import rupandehiGeoJson from '../data/rupandehi.json'; 
+
+// Standard mathematical mapping bounding parameters
+const WORLD_OUTER_RING = [
+  [90, -180],
+  [90, 180],
+  [-90, 180],
+  [-90, -180]
+];
 
 /**
  * Robust GIS Parser:
@@ -26,6 +36,7 @@ const getLeafletBoundaryCoords = (geoJson) => {
       let isObject = false;
       let firstVal = 0;
       
+      // Auto-detect structure type
       if (firstPoint && typeof firstPoint === 'object' && !Array.isArray(firstPoint)) {
         isObject = true;
         firstVal = firstPoint.lng || firstPoint.longitude || 0;
@@ -33,6 +44,7 @@ const getLeafletBoundaryCoords = (geoJson) => {
         firstVal = firstPoint[0];
       }
 
+      // Nepal coordinates sit around Lng 83.x / Lat 27.x
       const needsSwap = firstVal > 50;
 
       return rawCoords.map(coord => {
