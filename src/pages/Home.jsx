@@ -20,12 +20,13 @@ export default function Home() {
   };
 
   return (
-    <div className="w-full min-h-screen bg-zinc-950 text-white flex flex-col items-center overflow-y-auto md:pt-20">
+    /* pt-20 applied globally to create spacing on both mobile and desktop initial loads */
+    <div className="w-full min-h-screen bg-zinc-950 text-white flex flex-col items-center overflow-y-auto pt-20">
       
       {/* Tactical Header with capped max-width for 4K displays */}
       <header className="w-full max-w-7xl px-6 md:px-12 py-6 flex items-center justify-between border-b border-zinc-900 select-none mx-auto">
         <div className="flex flex-col">
-          <span className="text-lg font-black tracking-widest text-white uppercase">RunRajya</span>
+          <span className="text-sm font-black tracking-widest text-white uppercase font-sans">RunRajya</span>
           <span className="text-[9px] font-mono text-amber-500 uppercase tracking-wider">Sector-Grid Fitness v2.0</span>
         </div>
         <Link 

@@ -43,7 +43,6 @@ export default function DynamicIslandNav() {
     }
   };
 
-  // Helper extracts first letters of name for profile portal block
   const getInitials = (name) => {
     if (!name) return 'EX';
     const parts = name.trim().split(/\s+/);
@@ -58,30 +57,25 @@ export default function DynamicIslandNav() {
 
   return (
     <>
-      {/* 
-        1. DESKTOP VIEW (Redesigned NavMenu)
-        Expanded h-20 (80px) height. Split into Left, Middle, and Right.
-      */}
-      <nav className="hidden md:flex fixed top-0 left-0 right-0 h-20 bg-zinc-950/80 backdrop-blur-md border-b border-zinc-900 z-[1000] items-center justify-between px-8 select-none">
+      {/* 1. DESKTOP VIEW (NavMenu) */}
+      <nav className="hidden md:flex fixed top-0 left-0 right-0 h-20 bg-transparent z-[1000] items-center justify-between px-8 select-none">
         
-        {/* Left Section: Rounded logo with stacked status bar beneath */}
+        {/* Left Section: Single floating block */}
         <div className="flex items-center">
-          <Link to="/" className="flex flex-col items-start gap-1">
-            {/* Rounded Logo */}
-            <div className="w-9 h-9 rounded-full bg-amber-500 flex items-center justify-center font-black text-zinc-950 font-mono text-sm shadow-[0_0_12px_rgba(245,158,11,0.25)]">
+          <div className="flex flex-col items-start gap-1.5 p-3 bg-zinc-950/90 border border-zinc-900 rounded-2xl shadow-xl">
+            <Link to="/" className="w-9 h-9 rounded-full bg-amber-500 flex items-center justify-center font-black text-zinc-950 font-mono text-sm shadow-[0_0_12px_rgba(245,158,11,0.25)]">
               RR
-            </div>
-            {/* Active Status bar stacked below logo */}
+            </Link>
             <div className={`flex items-center gap-1 px-1.5 py-0.5 rounded border text-[8px] font-mono uppercase tracking-wider ${
               networkOnline ? 'border-emerald-900/40 text-emerald-500 bg-emerald-950/10' : 'border-red-900/40 text-red-500 bg-red-950/10'
             }`}>
               <span className={`w-1 h-1 rounded-full ${networkOnline ? 'bg-emerald-500 animate-pulse' : 'bg-red-500'}`} />
               <span>{networkOnline ? 'Sync Active' : 'Offline'}</span>
             </div>
-          </Link>
+          </div>
         </div>
 
-        {/* Middle Section: Floating Pill-Shaped Dynamic Island */}
+        {/* Middle Section: Floating Dynamic Island */}
         <div className="flex items-center justify-center">
           <div className="h-10 bg-zinc-950 border border-zinc-800/80 rounded-full px-6 flex items-center gap-6 shadow-[0_0_15px_rgba(0,0,0,0.4)] backdrop-blur-md transition-all hover:border-zinc-700">
             <Link 
@@ -101,15 +95,6 @@ export default function DynamicIslandNav() {
             >
               Sector Grid
             </Link>
-            <span className="w-1 h-1 rounded-full bg-zinc-800" />
-            <Link 
-              to="/profile" 
-              className={`text-xs font-mono tracking-wider uppercase transition-colors ${
-                isActive('/profile') ? 'text-amber-500 font-bold' : 'text-zinc-400 hover:text-zinc-200'
-              }`}
-            >
-              Profile
-            </Link>
           </div>
         </div>
 
@@ -117,7 +102,6 @@ export default function DynamicIslandNav() {
         <div className="flex items-center gap-3">
           {user ? (
             <div className="flex items-center gap-2.5">
-              {/* Block 1: Profile Portal (Initials block) */}
               <Link 
                 to="/profile" 
                 className="w-10 h-10 rounded-xl bg-zinc-900 border border-zinc-800 hover:border-zinc-700 flex items-center justify-center font-bold font-mono text-zinc-100 hover:text-amber-500 hover:bg-zinc-850/80 transition-all shadow-md"
@@ -126,7 +110,6 @@ export default function DynamicIslandNav() {
                 {initials}
               </Link>
 
-              {/* Block 2: Red-accented Logout button */}
               <button
                 type="button"
                 onClick={() => signOut?.()}
@@ -137,20 +120,26 @@ export default function DynamicIslandNav() {
               </button>
             </div>
           ) : (
-            <button
-              type="button"
-              onClick={handleAuthTrigger}
-              className="h-10 px-5 bg-amber-500 hover:bg-amber-400 text-zinc-950 font-black font-mono text-xs uppercase tracking-wider rounded-xl transition-all shadow-md"
-            >
-              Sign In
-            </button>
+            <>
+              <div className="w-10 h-10 rounded-xl bg-zinc-900 border border-zinc-800 flex items-center justify-center font-bold font-mono text-zinc-500 select-none shadow-md">
+                GST
+              </div>
+
+              <button
+                type="button"
+                onClick={handleAuthTrigger}
+                className="h-10 px-5 bg-amber-500 hover:bg-amber-400 text-zinc-950 font-black font-mono text-xs uppercase tracking-wider rounded-xl transition-all shadow-md"
+              >
+                Sign In
+              </button>
+            </>
           )}
         </div>
       </nav>
 
       {/* 
         2. MOBILE VIEW (Preserved Dynamic Island)
-        Remains pinned top-center with click propagation protection.
+        Repositioned top-center with absolute safety triggers.
       */}
       <div className="md:hidden fixed top-3 left-1/2 -translate-x-1/2 z-[1001] flex flex-col items-center select-none">
         <div 
@@ -215,8 +204,29 @@ export default function DynamicIslandNav() {
                   <span>Profile Dashboard</span>
                   {isActive('/profile') && <span className="w-1.5 h-1.5 rounded-full bg-amber-500" />}
                 </Link>
+
+                {/* 
+                  Mobile Logout Trigger:
+                  Renders as a red-accented navigation item at the bottom of the list when logged in [10].
+                */}
+                {user && (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      signOut?.();
+                      setIsExpanded(false);
+                    }}
+                    className="text-xs font-mono tracking-wider uppercase text-red-500 hover:text-red-400 py-1 flex items-center justify-between w-full text-left transition-colors border-t border-zinc-900/60 pt-2.5 mt-1"
+                  >
+                    <span>Logout Session</span>
+                    <svg className="w-3.5 h-3.5 text-red-500" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" d="M15.75 9V5.25A2.25 2.25 0 0013.5 3h-6a2.25 2.25 0 00-2.25 2.25v13.5A2.25 2.25 0 007.5 21h6a2.25 2.25 0 002.25-2.25V15m3 0l3-3m0 0l-3-3m3 3H9" />
+                    </svg>
+                  </button>
+                )}
               </div>
 
+              {/* Collapse Trigger */}
               <div 
                 onClick={() => setIsExpanded(false)}
                 className="flex justify-center pt-2 border-t border-zinc-900 cursor-pointer"

@@ -132,7 +132,8 @@ export default function Profile() {
   };
 
   return (
-    <div className="w-full min-h-screen bg-zinc-950 text-white p-4 md:p-8 lg:p-12 flex justify-center relative overflow-y-auto md:pt-20">
+    /* pt-20 applied globally to create spacing on both mobile and desktop initial loads */
+    <div className="w-full min-h-screen bg-zinc-950 text-white p-4 md:p-8 lg:p-12 flex justify-center relative overflow-y-auto pt-20">
       <div className="w-full max-w-5xl flex flex-col gap-6">
         
         {/* Profile Card Header */}
