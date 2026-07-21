@@ -6,7 +6,7 @@ import AuthModal from '../components/AuthModal';
 import PocketLockOverlay from '../components/PocketLockOverlay';
 import DynamicIslandNav from '../components/DynamicIslandNav';
 import { usePocketLock } from '../hooks/usePocketLock';
-import { useRunSession } from '../hooks/useRunSession'; // Instantiated at parent level
+import { useRunSession } from '../hooks/useRunSession';
 import { useDailyGoal } from '../hooks/useDailyGoal';
 import { useGPS } from '../hooks/useGPS'; 
 import { useCompass } from '../hooks/useCompass'; 
@@ -32,15 +32,11 @@ function getDistanceMeters(lat1, lon1, lat2, lon2) {
 }
 
 export default function MapPage() {
-  // Set default follow mode state to false (Follow Off)
   const [followPlayer, setFollowPlayer] = useState(false);
-  
   const auth = useAuth();
   const user = auth?.session?.user;
 
   useOfflineSync();
-
-  const { grid } = useZonesGrid();
 
   const { ownedZones, evaluateCapture } = useZoneCaptures();
 
@@ -49,16 +45,20 @@ export default function MapPage() {
 
   const { isLocked, lockScreen, unlockScreen } = usePocketLock();
   
-  // Single, unified run session state instance at parent level
   const session = useRunSession(); 
   const { duration, distance, calories, sessionActive, sessionId, addTrackedDistance } = session;
 
-  // Compute daily goal metrics dynamically using custom target
   const { progressPct, currentValueKm, targetValueKm } = useDailyGoal(distance, dailyTargetM);
 
+  // Refs to manage positional states
   const lastPositionRef = useRef(null);
+  
+  // Mutable Grid Reference:
+  // Breaks the Temporal Dead Zone (TDZ) by allowing useGPS to safely query 
+  // grid cells asynchronously without needing to declare useZonesGrid first.
+  const gridRef = useRef([]);
 
-  // Geolocation Sensor: Evaluates distance traveled and sector captures on every physical movement
+  // 1. Geolocation Sensor (Declared first, supplying position for useZonesGrid)
   const { position, gpsStatus, errorMsg } = useGPS((coords) => {
     if (sessionActive) {
       if (lastPositionRef.current) {
@@ -71,12 +71,23 @@ export default function MapPage() {
         addTrackedDistance(metersMoved);
       }
 
-      if (grid && grid.length > 0) {
-        evaluateCapture(coords, grid, sessionId, user?.id);
+      // Read from the mutable reference instead of the stale variable (TDZ Fix)
+      if (gridRef.current && gridRef.current.length > 0) {
+        evaluateCapture(coords, gridRef.current, sessionId, user?.id);
       }
     }
     lastPositionRef.current = coords;
   });
+
+  // 2. Fetch adjacent zones (Consumes position from useGPS)
+  const { grid, loading: gridLoading } = useZonesGrid(position);
+
+  // Keep the mutable Grid Reference synchronized on every data load
+  useEffect(() => {
+    if (grid) {
+      gridRef.current = grid;
+    }
+  }, [grid]);
 
   // REACTIVE INSTANT CAPTURE
   useEffect(() => {
@@ -179,7 +190,6 @@ export default function MapPage() {
         </div>
 
         <div className="border-t border-zinc-900 p-4 bg-zinc-950">
-          {/* Forward the parent session instance to FieldHUD */}
           <FieldHUD 
             session={session} 
             followPlayer={followPlayer} 
@@ -224,7 +234,7 @@ export default function MapPage() {
       {/* 3. Mobile Navigation Bottom Control Sheet (Takes 35% of mobile viewport) */}
       <div className="h-[35%] w-full md:hidden bg-zinc-950 z-20 shadow-2xl">
         <FieldHUD 
-          session={session} // Forward the parent session instance to FieldHUD
+          session={session} 
           followPlayer={followPlayer} 
           setFollowPlayer={setFollowPlayer} 
           startLockHold={startLockHold}
