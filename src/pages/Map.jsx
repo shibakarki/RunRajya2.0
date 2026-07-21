@@ -6,7 +6,7 @@ import AuthModal from '../components/AuthModal';
 import PocketLockOverlay from '../components/PocketLockOverlay';
 import DynamicIslandNav from '../components/DynamicIslandNav';
 import { usePocketLock } from '../hooks/usePocketLock';
-import { useRunSession } from '../hooks/useRunSession';
+import { useRunSession } from '../hooks/useRunSession'; // Instantiated at parent level
 import { useDailyGoal } from '../hooks/useDailyGoal';
 import { useGPS } from '../hooks/useGPS'; 
 import { useCompass } from '../hooks/useCompass'; 
@@ -27,20 +27,38 @@ function getDistanceMeters(lat1, lon1, lat2, lon2) {
       Math.cos((lat2 * Math.PI) / 180) *
       Math.sin(dLon / 2) *
       Math.sin(dLon / 2);
-  const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a)); // Corrected standard mathematical minus sign (-)
+  const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
   return R * c;
 }
 
 export default function MapPage() {
-  const [followPlayer, setFollowPlayer] = useState(true);
+  // Set default follow mode state to false (Follow Off)
+  const [followPlayer, setFollowPlayer] = useState(false);
+  
   const auth = useAuth();
   const user = auth?.session?.user;
 
   useOfflineSync();
 
+  const { grid } = useZonesGrid();
+
+  const { ownedZones, evaluateCapture } = useZoneCaptures();
+
+  const { stats } = useProfileStats(user?.id);
+  const dailyTargetM = stats?.dailyTargetM || 5000; 
+
+  const { isLocked, lockScreen, unlockScreen } = usePocketLock();
+  
+  // Single, unified run session state instance at parent level
+  const session = useRunSession(); 
+  const { duration, distance, calories, sessionActive, sessionId, addTrackedDistance } = session;
+
+  // Compute daily goal metrics dynamically using custom target
+  const { progressPct, currentValueKm, targetValueKm } = useDailyGoal(distance, dailyTargetM);
+
   const lastPositionRef = useRef(null);
 
-  // 1. Geolocation Sensor: Evaluates distance traveled and sector captures on every physical movement
+  // Geolocation Sensor: Evaluates distance traveled and sector captures on every physical movement
   const { position, gpsStatus, errorMsg } = useGPS((coords) => {
     if (sessionActive) {
       if (lastPositionRef.current) {
@@ -60,27 +78,7 @@ export default function MapPage() {
     lastPositionRef.current = coords;
   });
 
-  // 2. Fetch adjacent zones in real-time from Supabase based on player's active position
-  const { grid, loading: gridLoading } = useZonesGrid(position);
-
-  // 3. Initialize capture handler
-  const { ownedZones, evaluateCapture } = useZoneCaptures();
-
-  // Fetch logged-in user profile statistics (for customized daily goals target)
-  const { stats } = useProfileStats(user?.id);
-  const dailyTargetM = stats?.dailyTargetM || 5000; 
-
-  const { isLocked, lockScreen, unlockScreen } = usePocketLock();
-  
-  // Destructure active run tracking statistics
-  const { duration, distance, calories, sessionActive, sessionId, addTrackedDistance } = useRunSession();
-
-  // Compute daily goal metrics dynamically using custom target
-  const { progressPct, currentValueKm, targetValueKm } = useDailyGoal(distance, dailyTargetM);
-
-  // 4. REACTIVE INSTANT CAPTURE:
-  // Evaluates a capture instantly the exact second the session turns active,
-  // bypassing the need to move physically to trigger the first zone capture.
+  // REACTIVE INSTANT CAPTURE
   useEffect(() => {
     if (sessionActive && position && grid && grid.length > 0 && user?.id) {
       console.log('Session activated. Executing initial zone capture check...');
@@ -95,7 +93,6 @@ export default function MapPage() {
   const [holdProgress, setHoldProgress] = useState(0);
   const holdIntervalRef = useRef(null);
 
-  // Activates the orientation permission on the first screen tap
   const handlePageClick = async () => {
     if (requestCompassPermission) {
       await requestCompassPermission();
@@ -133,7 +130,7 @@ export default function MapPage() {
 
   return (
     <div 
-      onClick={handlePageClick} // Captures first tap to authorize compass orientation
+      onClick={handlePageClick} 
       className="w-full h-[100dvh] flex flex-col md:flex-row bg-zinc-950 text-white overflow-hidden relative md:pt-16"
     >
       
@@ -145,7 +142,6 @@ export default function MapPage() {
         </div>
 
         <div className="flex-1 p-6 flex flex-col gap-6">
-          {/* GoalRing dynamically bound to progress metrics */}
           <div className="flex justify-center bg-zinc-900/10 border border-zinc-900 rounded-xl p-4">
             <GoalRing 
               progressPct={progressPct} 
@@ -168,7 +164,6 @@ export default function MapPage() {
               )}
             </div>
             
-            {/* Live Database Diagnostics Row */}
             <div className="flex justify-between items-center text-xs">
               <span className="text-zinc-500">Local Sectors Loaded:</span>
               <span className="text-zinc-300 font-mono font-bold">
@@ -184,8 +179,9 @@ export default function MapPage() {
         </div>
 
         <div className="border-t border-zinc-900 p-4 bg-zinc-950">
-          {/* Pass GPS status to gate session actions */}
+          {/* Forward the parent session instance to FieldHUD */}
           <FieldHUD 
+            session={session} 
             followPlayer={followPlayer} 
             setFollowPlayer={setFollowPlayer}
             startLockHold={startLockHold}
@@ -199,14 +195,13 @@ export default function MapPage() {
 
       {/* 2. Map Canvas (Takes 65% of mobile viewport, or 100% of desktop viewport) */}
       <div className="flex-1 h-[65%] md:h-full relative w-full">
-        {/* Pass loaded grid and active owned zones directly to MapCanvas */}
         <MapCanvas 
           position={position} 
-          zones={grid} // Complete active coordinate polygons
-          ownedZones={ownedZones} // Optimistic claim indexes
+          zones={grid} 
+          ownedZones={ownedZones} 
           following={followPlayer}
           heading={heading} 
-          currentUserId={user?.id} // Pass currentUserId to paint owned zones in faction colors
+          currentUserId={user?.id} 
           currentUserFactionId={stats?.factionId}
         />
 
@@ -229,6 +224,7 @@ export default function MapPage() {
       {/* 3. Mobile Navigation Bottom Control Sheet (Takes 35% of mobile viewport) */}
       <div className="h-[35%] w-full md:hidden bg-zinc-950 z-20 shadow-2xl">
         <FieldHUD 
+          session={session} // Forward the parent session instance to FieldHUD
           followPlayer={followPlayer} 
           setFollowPlayer={setFollowPlayer} 
           startLockHold={startLockHold}

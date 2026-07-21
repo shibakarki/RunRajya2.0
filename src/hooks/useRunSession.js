@@ -1,7 +1,6 @@
 import { useState, useEffect, useRef } from 'react';
 import { useCalorieCounter } from './useCalorieCounter';
 
-// Utility to generate a client-side UUID (offline capability)
 function generateUUID() {
   return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, (c) => {
     const r = (Math.random() * 16) | 0;
@@ -18,7 +17,6 @@ export function useRunSession() {
 
   const trackerIntervalRef = useRef(null);
 
-  // Hook handles active MET caloric accumulation calculations
   const { calories } = useCalorieCounter(distance, duration);
 
   // Hot recovery on mount
@@ -90,7 +88,7 @@ export function useRunSession() {
           session_id: sessionId,
           distance_m: distance,
           calories_kcal: calories,
-          duration_s: duration,
+          duration_s: duration, // Queue duration in seconds
           timestamp: new Date().toISOString(),
           status: 'ended',
           synced: false
@@ -101,6 +99,8 @@ export function useRunSession() {
     }
 
     setSessionId(null);
+    setDuration(0); // Reset timer instantly on end
+    setDistance(0); // Reset distance instantly on end
   };
 
   const addTrackedDistance = (meters) => {

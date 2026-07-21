@@ -1,13 +1,13 @@
 import React from 'react';
-import { useRunSession } from '../hooks/useRunSession';
 
 export default function FieldHUD({ 
+  session, // Consumes the lifted session prop
   followPlayer, 
   setFollowPlayer, 
   startLockHold, 
   cancelLockHold, 
   holdProgress, 
-  gpsStatus, // Prop determines starting permissions
+  gpsStatus, 
   requestCompassPermission 
 }) {
   const { 
@@ -17,7 +17,7 @@ export default function FieldHUD({
     duration = 0, 
     distance = 0, 
     calories = 0 
-  } = useRunSession();
+  } = session;
 
   const formatDuration = (seconds) => {
     const hrs = Math.floor(seconds / 3600);
@@ -35,11 +35,9 @@ export default function FieldHUD({
     return `${(meters / 1000).toFixed(2)} km`;
   };
 
-  // Safe launcher triggers permissions checklists before initiating run sessions
   const handleStartTrigger = async () => {
     if (gpsStatus !== 'locked') return;
 
-    // iOS WebKit orientation sensor permission prompt requires an active user gesture
     if (requestCompassPermission) {
       await requestCompassPermission();
     }
@@ -106,7 +104,7 @@ export default function FieldHUD({
         </button>
       </div>
 
-      {/* 3. Main Session State Button (GPS Gated) */}
+      {/* 3. Main Session State Button */}
       <div className="mt-3">
         {!sessionActive ? (
           gpsStatus === 'locked' ? (
@@ -118,7 +116,6 @@ export default function FieldHUD({
               START RUN SESSION
             </button>
           ) : (
-            /* Disabled state blocks session start if GPS coordinates stream has not locked */
             <button
               type="button"
               disabled

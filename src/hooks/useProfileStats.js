@@ -5,9 +5,10 @@ export function useProfileStats(userId) {
   const [stats, setStats] = useState({
     username: '',
     factionId: '',
-    dailyTargetM: 5000, // Added default daily target
+    dailyTargetM: 5000, 
     totalDistanceM: 0,
     totalCaloriesKcal: 0,
+    totalDurationS: 0, // Added total duration state
     zonesOwnedCount: 0,
     runsCompletedCount: 0
   });
@@ -25,19 +26,19 @@ export function useProfileStats(userId) {
       setError(null);
 
       try {
-        // 1. Fetch user bio details (safely using maybeSingle() instead of single())
+        // 1. Fetch user bio details
         const { data: profile, error: profileErr } = await supabase
           .from('profiles')
-          .select('name, faction_id, daily_target_m') // Fetched daily_target_m
+          .select('name, faction_id, daily_target_m') 
           .eq('id', userId)
           .maybeSingle();
 
         if (profileErr) throw profileErr;
 
-        // 2. Fetch history records (using distance_m)
+        // 2. Fetch history records (using distance_m and duration_s)
         const { data: sessions, error: sessionsErr } = await supabase
           .from('sessions')
-          .select('distance_m, calories')
+          .select('distance_m, calories, duration_s')
           .eq('user_id', userId);
 
         if (sessionsErr) throw sessionsErr;
@@ -52,8 +53,8 @@ export function useProfileStats(userId) {
 
         const distanceSum = (sessions || []).reduce((acc, s) => acc + (Number(s.distance_m) || 0), 0);
         const caloriesSum = (sessions || []).reduce((acc, s) => acc + (Number(s.calories) || 0), 0);
+        const durationSum = (sessions || []).reduce((acc, s) => acc + (Number(s.duration_s) || 0), 0); // Sum seconds
 
-        // Gracefully handle the case where the user profile row does not exist yet
         if (!profile) {
           setStats({
             username: 'Explorer',
@@ -61,6 +62,7 @@ export function useProfileStats(userId) {
             dailyTargetM: 5000,
             totalDistanceM: distanceSum,
             totalCaloriesKcal: caloriesSum,
+            totalDurationS: durationSum,
             zonesOwnedCount: count || 0,
             runsCompletedCount: sessions?.length || 0
           });
@@ -68,9 +70,10 @@ export function useProfileStats(userId) {
           setStats({
             username: profile.name || 'Explorer',
             factionId: profile.faction_id || 1,
-            dailyTargetM: profile.daily_target_m || 5000, // Synced target value
+            dailyTargetM: profile.daily_target_m || 5000, 
             totalDistanceM: distanceSum,
             totalCaloriesKcal: caloriesSum,
+            totalDurationS: durationSum, // Hydrated duration statistics
             zonesOwnedCount: count || 0,
             runsCompletedCount: sessions?.length || 0
           });

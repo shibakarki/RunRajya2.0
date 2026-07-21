@@ -21,7 +21,7 @@ export default function Profile() {
   const { stats, loading: statsLoading, error: statsErr } = useProfileStats(user?.id);
   
   // Leaderboards Hooks (Local and Global)
-  const [activeTab, setActiveTab] = useState('local'); // 'local' | 'global'
+  const [activeTab, setActiveTab] = useState('local'); 
   const { rankings: localRankings, loading: localLoading, error: localErr } = useLeaderboard('rupandehi');
   const { isGlobalComingSoon } = useLeaderboard('global');
 
@@ -40,9 +40,7 @@ export default function Profile() {
     ? user.user_metadata.full_name
     : stats?.username || 'Explorer';
 
-  // HOOKS RULE CORRECTION:
-  // Moved this useEffect to the top (above conditional returns) to ensure 
-  // it is executed in the exact same order on every render pass.
+  // Sync editing fields with database profiles values when editing initiates
   useEffect(() => {
     if (stats) {
       const defaultName = stats.username === 'Explorer' && user?.user_metadata?.full_name
@@ -53,6 +51,14 @@ export default function Profile() {
       setEditTargetKm(Number((stats.dailyTargetM / 1000).toFixed(1))); 
     }
   }, [stats, isEditing, user]);
+
+  // Formats cumulative active seconds into readable hours/minutes
+  const formatTotalTime = (seconds) => {
+    if (!seconds || seconds <= 0) return '0 m';
+    const hrs = Math.floor(seconds / 3600);
+    const mins = Math.floor((seconds % 3600) / 60);
+    return hrs > 0 ? `${hrs}h ${mins}m` : `${mins}m`;
+  };
 
   const handleAuthTrigger = () => {
     const openFn = auth.openModal || auth.setModalOpen || auth.toggleModal || auth.requireAuth;
@@ -285,9 +291,9 @@ export default function Profile() {
             <span className="block text-[10px] font-mono text-zinc-500 uppercase tracking-widest">Energy Burned</span>
             <span className="block text-2xl font-black font-mono mt-1 text-zinc-100">{Math.round(stats.totalCaloriesKcal)} kcal</span>
           </div>
-          <div className="border border-zinc-900 bg-zinc-900/10 rounded-2xl p-4 text-center col-span-2 md:col-span-1">
-            <span className="block text-[10px] font-mono text-zinc-500 uppercase tracking-widest">Runs Logged</span>
-            <span className="block text-2xl font-black font-mono mt-1 text-zinc-100">{stats.runsCompletedCount}</span>
+          <div className="border border-zinc-900 bg-zinc-900/10 rounded-2xl p-4 text-center">
+            <span className="block text-[10px] font-mono text-zinc-500 uppercase tracking-widest">Active Time</span>
+            <span className="block text-2xl font-black font-mono mt-1 text-zinc-100">{formatTotalTime(stats.totalDurationS)}</span>
           </div>
         </div>
 

@@ -1,7 +1,6 @@
 import { useState, useEffect, useCallback } from 'react';
 import { supabase } from '../lib/supabase';
 
-// Map translates old string-based meta fields safely to integer IDs
 const FACTION_MAP = {
   'lumbini_guardians': 1,
   'devdaha_dynasty': 2,
@@ -54,7 +53,8 @@ export function useOfflineSync() {
               distance_m: trace.distance_m,
               calories: trace.calories_kcal,
               started_at: trace.timestamp, 
-              status: trace.status
+              status: trace.status,
+              duration_s: trace.duration_s // Synced duration metadata to Database
             });
 
           if (!sessionErr) {
@@ -99,8 +99,6 @@ export function useOfflineSync() {
             // First physical arrival wins: Sync if local stamp is older than current server stamp
             if (!serverZone?.captured_at || localCapturedAt < serverCapturedAt) {
               const rawFaction = session?.user?.user_metadata?.faction_id;
-              
-              // Translate legacy text fields to valid integer IDs
               const factionId = FACTION_MAP[rawFaction] || Number(rawFaction) || 1;
 
               const { error: claimErr } = await supabase
