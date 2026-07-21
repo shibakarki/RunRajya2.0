@@ -1,27 +1,26 @@
 import React from 'react';
-import { BrowserRouter as Router, Routes, Route } from 'react-router-dom';
-import { AuthProvider } from './context/AuthContext';
+import { Routes, Route } from 'react-router-dom';
+import ErrorBoundary from './components/ErrorBoundary'; // Handles high-safety runtime catches
 import DynamicIslandNav from './components/DynamicIslandNav';
-import ErrorBoundary from './components/ErrorBoundary'; // Keeps top-level safety [13]
 import Home from './pages/Home';
 import MapPage from './pages/Map';
 import Profile from './pages/Profile';
 
 export default function App() {
   return (
-    <ErrorBoundary> {/* Wraps the entire application stack [13] */}
-      <AuthProvider>
-        <Router>
-          {/* Persistent Navigation Header */}
-          <DynamicIslandNav />
-          
-          <Routes>
-            <Route path="/" element={<Home />} />
-            <Route path="/map" element={<MapPage />} />
-            <Route path="/profile" element={<Profile />} />
-          </Routes>
-        </Router>
-      </AuthProvider>
+    <ErrorBoundary>
+      {/* 
+        Persistent Navigation Header:
+        Because App is nested inside BrowserRouter in main.jsx, 
+        DynamicIslandNav and Routes have full, clean access to router context.
+      */}
+      <DynamicIslandNav />
+      
+      <Routes>
+        <Route path="/" element={<Home />} />
+        <Route path="/map" element={<MapPage />} />
+        <Route path="/profile" element={<Profile />} />
+      </Routes>
     </ErrorBoundary>
   );
 }
