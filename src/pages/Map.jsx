@@ -36,66 +36,55 @@ export default function MapPage() {
   const auth = useAuth();
   const user = auth?.session?.user;
 
-  // 1. Initialize background sync loop
   useOfflineSync();
 
-  // 2. Fetch the 5,212 cells from database/cache
-  const { grid, loading: gridLoading } = useZonesGrid(position);
-
-  // 3. Initialize capture handler
   const { ownedZones, evaluateCapture } = useZoneCaptures();
 
-  // Fetch logged-in user profile statistics (for customized daily goals target)
   const { stats } = useProfileStats(user?.id);
   const dailyTargetM = stats?.dailyTargetM || 5000; 
 
   const { isLocked, lockScreen, unlockScreen } = usePocketLock();
   
-  // Destructure active run tracking statistics
+  // Single, unified run session state instance at parent level
   const session = useRunSession(); 
   const { duration, distance, calories, sessionActive, sessionId, addTrackedDistance } = session;
 
   // Compute daily goal metrics dynamically using custom target
   const { progressPct, currentValueKm, targetValueKm } = useDailyGoal(distance, dailyTargetM);
 
-  // Refs to manage positional states
   const lastPositionRef = useRef(null);
-  const gridRef = useRef([]);
 
-  // 4. Geolocation Sensor: Evaluates distance traveled and sector captures on every physical movement
-  const { position, gpsStatus, errorMsg } = useGPS((coords) => {
-    if (sessionActive) {
-      if (lastPositionRef.current) {
-        const metersMoved = getDistanceMeters(
-          lastPositionRef.current.lat,
-          lastPositionRef.current.lng,
-          coords.lat,
-          coords.lng
-        );
-        addTrackedDistance(metersMoved);
-      }
+  // 1. Geolocation Sensor (Clean, parameterless stream)
+  const { position, gpsStatus, errorMsg } = useGPS();
 
-      if (gridRef.current && gridRef.current.length > 0) {
-        evaluateCapture(coords, gridRef.current, sessionId, user?.id);
-      }
-    }
-    lastPositionRef.current = coords;
-  });
+  // 2. Fetch adjacent zones in real-time from Supabase based on player's active position
+  const { grid, loading: gridLoading } = useZonesGrid(position);
 
-  // Keep the mutable Grid Reference synchronized on every data load
+  // 3. UNIFIED POSITION EFFECT:
+  // Listens to real-time position updates, accumulates distance, and evaluates capturing.
+  // Completely eliminates compiling loops and prevents Temporal Dead Zone crashes.
   useEffect(() => {
-    if (grid) {
-      gridRef.current = grid;
-    }
-  }, [grid]);
+    if (position) {
+      if (sessionActive) {
+        // A. Accumulate running distance
+        if (lastPositionRef.current) {
+          const metersMoved = getDistanceMeters(
+            lastPositionRef.current.lat,
+            lastPositionRef.current.lng,
+            position.lat,
+            position.lng
+          );
+          addTrackedDistance(metersMoved);
+        }
 
-  // REACTIVE INSTANT CAPTURE
-  useEffect(() => {
-    if (sessionActive && position && gridRef.current && gridRef.current.length > 0 && user?.id) {
-      console.log('Session activated. Executing initial zone capture check...');
-      evaluateCapture(position, gridRef.current, sessionId, user.id);
+        // B. Evaluate territory capture instantly
+        if (grid && grid.length > 0 && user?.id) {
+          evaluateCapture(position, grid, sessionId, user.id);
+        }
+      }
+      lastPositionRef.current = position;
     }
-  }, [sessionActive, position, gridRef.current, sessionId, user?.id, evaluateCapture]);
+  }, [position, sessionActive, grid, sessionId, user?.id, addTrackedDistance, evaluateCapture]);
 
   // Compass Magnetometer Sensor
   const { heading, requestPermission: requestCompassPermission } = useCompass();
@@ -107,15 +96,6 @@ export default function MapPage() {
   const handlePageClick = async () => {
     if (requestCompassPermission) {
       await requestCompassPermission();
-    }
-  };
-
-  // Safe launcher triggers permissions checklists before initiating run sessions
-  const handleAuthTrigger = () => {
-    if (typeof auth.requireAuth === 'function') {
-      auth.requireAuth(() => {
-        window.location.reload();
-      });
     }
   };
 

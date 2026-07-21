@@ -1,8 +1,9 @@
 import { useState, useEffect, useRef } from 'react';
 import { useAuth } from '../context/AuthContext';
 
+// Distance calculation using the Haversine formula
 function getDistanceMeters(lat1, lon1, lat2, lon2) {
-  const R = 6371000; 
+  const R = 6371000; // Radius of Earth in meters
   const dLat = ((lat2 - lat1) * Math.PI) / 180;
   const dLon = ((lon2 - lon1) * Math.PI) / 180;
   const a =
@@ -15,19 +16,17 @@ function getDistanceMeters(lat1, lon1, lat2, lon2) {
   return R * c;
 }
 
-export function useGPS(onValidPositionUpdate) {
+/**
+ * useGPS – standard geolocation sensor hook.
+ * Streams real-time position and GPS lock status.
+ */
+export function useGPS() {
   const [position, setPosition] = useState(null);
-  const [gpsStatus, setGpsStatus] = useState('acquiring'); 
+  const [gpsStatus, setGpsStatus] = useState('acquiring'); // 'acquiring' | 'locked' | 'error'
   const [errorMsg, setErrorMsg] = useState(null);
   
-  // Resolve active session to gate hardware access
   const auth = useAuth();
   const userId = auth?.session?.user?.id;
-
-  const callbackRef = useRef(onValidPositionUpdate);
-  useEffect(() => {
-    callbackRef.current = onValidPositionUpdate;
-  });
 
   const lastPositionRef = useRef(null);
   const lastTimestampRef = useRef(0);
@@ -51,11 +50,13 @@ export function useGPS(onValidPositionUpdate) {
         const { latitude, longitude, accuracy } = pos.coords;
         const timestamp = pos.timestamp;
 
+        // GPS Threshold constraint check (80m)
         if (accuracy > 80) {
           setGpsStatus('acquiring');
           return;
         }
 
+        // Anti-cheat verification
         if (lastPositionRef.current) {
           const distanceMoved = getDistanceMeters(
             lastPositionRef.current.lat,
@@ -68,6 +69,7 @@ export function useGPS(onValidPositionUpdate) {
 
           if (timeElapsedSeconds > 0) {
             const speedMps = distanceMoved / timeElapsedSeconds;
+            // Speed constraint check: ~15 km/h limit (4.16 m/s)
             if (speedMps > 4.16) {
               console.warn(`GPS point rejected. Speed limit exceeded.`);
               return; 
@@ -81,10 +83,6 @@ export function useGPS(onValidPositionUpdate) {
         
         lastPositionRef.current = validCoords;
         lastTimestampRef.current = timestamp;
-
-        if (callbackRef.current) {
-          callbackRef.current(validCoords);
-        }
       },
       (error) => {
         console.error('GPS error status:', error.message);
