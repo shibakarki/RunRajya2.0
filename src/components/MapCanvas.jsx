@@ -4,7 +4,8 @@ import L from 'leaflet';
 import 'leaflet/dist/leaflet.css';
 import ZoneLayer from './ZoneLayer'; 
 
-import rupandehiGeoJson from '../data/rupandehi.json'; 
+// Updated import to target your existing precise boundary data file
+import rupandehiGeoJson from '../data/rupandehi_boundary.json'; 
 
 const FALLBACK_CENTER = [27.5291, 83.447];
 
@@ -18,7 +19,7 @@ const WORLD_OUTER_RING = [
 /**
  * Robust GIS Parser:
  * Auto-detects whether coordinates are stored as objects ({lat, lng} / {latitude, longitude})
- * or standard arrays, swaps axes only if needed, and guarantees valid numeric values.
+ * or standard arrays, and guarantees valid numeric values in [latitude, longitude] order.
  */
 const getLeafletBoundaryCoords = (geoJson) => {
   try {
