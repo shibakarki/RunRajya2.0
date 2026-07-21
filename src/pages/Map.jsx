@@ -53,6 +53,7 @@ export default function MapPage() {
   const { progressPct, currentValueKm, targetValueKm } = useDailyGoal(distance, dailyTargetM);
 
   const lastPositionRef = useRef(null);
+  const gridRef = useRef([]);
 
   // 1. Geolocation Sensor (Clean, parameterless stream)
   const { position, gpsStatus, errorMsg } = useGPS();
@@ -93,9 +94,19 @@ export default function MapPage() {
   const [holdProgress, setHoldProgress] = useState(0);
   const holdIntervalRef = useRef(null);
 
+  // Activates the orientation permission on the first screen tap
   const handlePageClick = async () => {
     if (requestCompassPermission) {
       await requestCompassPermission();
+    }
+  };
+
+  // Safe launcher triggers permissions checklists before initiating run sessions
+  const handleAuthTrigger = () => {
+    if (typeof auth.requireAuth === 'function') {
+      auth.requireAuth(() => {
+        window.location.reload();
+      });
     }
   };
 
@@ -144,7 +155,7 @@ export default function MapPage() {
           </p>
           <button
             type="button"
-            onClick={handleAuthTrigger}
+            onClick={handleAuthTrigger} // Now fully defined in scope
             className="w-full mt-2 py-3 bg-amber-500 hover:bg-amber-400 text-zinc-950 font-bold rounded-xl text-xs uppercase tracking-wider transition-colors"
           >
             Sign In to Unlock Map
@@ -171,7 +182,6 @@ export default function MapPage() {
         </div>
 
         <div className="flex-1 p-6 flex flex-col gap-6">
-          {/* GoalRing dynamically bound to progress metrics */}
           <div className="flex justify-center bg-zinc-900/10 border border-zinc-900 rounded-xl p-4">
             <GoalRing 
               progressPct={progressPct} 
@@ -210,7 +220,6 @@ export default function MapPage() {
         </div>
 
         <div className="border-t border-zinc-900 p-4 bg-zinc-950">
-          {/* Forward the parent session instance to FieldHUD */}
           <FieldHUD 
             session={session} 
             followPlayer={followPlayer} 

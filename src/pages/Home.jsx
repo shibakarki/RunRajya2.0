@@ -2,6 +2,7 @@ import React from 'react';
 import { Link } from 'react-router-dom';
 import { useGlobalStats } from '../hooks/useGlobalStats';
 import DistrictMapPreview from '../components/DistrictMapPreview';
+import AuthModal from '../components/AuthModal'; // Imported to enable modal rendering on the Home page
 
 const FACTION_CARDS = [
   { id: 1, name: 'Lumbini Guardians', color: 'text-yellow-500', border: 'border-yellow-900/40', bg: 'bg-yellow-950/10', desc: 'Guardians of the sacred birthplace. Peaceful, focused, and steady.' },
@@ -20,8 +21,7 @@ export default function Home() {
   };
 
   return (
-    /* pt-20 applied globally to create spacing on both mobile and desktop initial loads */
-    <div className="w-full min-h-screen bg-zinc-950 text-white flex flex-col items-center overflow-y-auto pt-20">
+    <div className="w-full min-h-screen bg-zinc-950 text-white flex flex-col items-center overflow-y-auto pt-20 relative">
       
       {/* Tactical Header with capped max-width for 4K displays */}
       <header className="w-full max-w-7xl px-6 md:px-12 py-6 flex items-center justify-between border-b border-zinc-900 select-none mx-auto">
@@ -181,6 +181,9 @@ export default function Home() {
       <footer className="w-full border-t border-zinc-900 bg-zinc-950/40 py-8 px-6 mt-12 flex justify-center text-[10px] font-mono text-zinc-600 select-none">
         <span>RUNRAJYA GAME ENGINE v2.0 • ACADEMIC BUILD</span>
       </footer>
+
+      {/* Mounted AuthModal so it renders when the header "Sign In" button is clicked */}
+      <AuthModal />
     </div>
   );
 }
