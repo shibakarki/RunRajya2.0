@@ -57,15 +57,24 @@ export default function DynamicIslandNav() {
 
   return (
     <>
-      {/* 1. DESKTOP VIEW (NavMenu) */}
+      {/* 
+        1. DESKTOP VIEW (NavMenu)
+        Parent nav container set to bg-transparent with no blur filters.
+      */}
       <nav className="hidden md:flex fixed top-0 left-0 right-0 h-20 bg-transparent z-[1000] items-center justify-between px-8 select-none">
         
-        {/* Left Section: Single floating block */}
+        {/* Left Section: Single floating block containing full text typography logo */}
         <div className="flex items-center">
           <div className="flex flex-col items-start gap-1.5 p-3 bg-zinc-950/90 border border-zinc-900 rounded-2xl shadow-xl">
-            <Link to="/" className="w-9 h-9 rounded-full bg-amber-500 flex items-center justify-center font-black text-zinc-950 font-mono text-sm shadow-[0_0_12px_rgba(245,158,11,0.25)]">
-              RR
+            {/* Bold typography logo "RUNRAJYA" */}
+            <Link 
+              to="/" 
+              className="text-base font-black tracking-widest text-white hover:text-amber-500 transition-colors select-none font-sans leading-none pb-0.5"
+            >
+              RUNRAJYA
             </Link>
+            
+            {/* Active Status bar stacked below logo */}
             <div className={`flex items-center gap-1 px-1.5 py-0.5 rounded border text-[8px] font-mono uppercase tracking-wider ${
               networkOnline ? 'border-emerald-900/40 text-emerald-500 bg-emerald-950/10' : 'border-red-900/40 text-red-500 bg-red-950/10'
             }`}>
@@ -75,9 +84,9 @@ export default function DynamicIslandNav() {
           </div>
         </div>
 
-        {/* Middle Section: Floating Dynamic Island */}
+        {/* Middle Section: Floating Dynamic Island centered in open background space */}
         <div className="flex items-center justify-center">
-          <div className="h-10 bg-zinc-950 border border-zinc-800/80 rounded-full px-6 flex items-center gap-6 shadow-[0_0_15px_rgba(0,0,0,0.4)] backdrop-blur-md transition-all hover:border-zinc-700">
+          <div className="h-10 bg-zinc-950/90 border border-zinc-800/80 rounded-full px-6 flex items-center gap-5 shadow-[0_0_15px_rgba(0,0,0,0.4)] backdrop-blur-md transition-all hover:border-zinc-700">
             <Link 
               to="/" 
               className={`text-xs font-mono tracking-wider uppercase transition-colors ${
@@ -99,47 +108,53 @@ export default function DynamicIslandNav() {
         </div>
 
         {/* Right Section: Split profile initials block + logout block */}
-        <div className="flex items-center gap-3">
-          {user ? (
-            <div className="flex items-center gap-2.5">
-              <Link 
-                to="/profile" 
-                className="w-10 h-10 rounded-xl bg-zinc-900 border border-zinc-800 hover:border-zinc-700 flex items-center justify-center font-bold font-mono text-zinc-100 hover:text-amber-500 hover:bg-zinc-850/80 transition-all shadow-md"
-                title="Profile Dashboard"
-              >
-                {initials}
-              </Link>
+        <div className="flex items-center">
+          <div className="flex items-center gap-3 p-2 bg-zinc-950/90 border border-zinc-900 rounded-2xl shadow-xl h-14">
+            {user ? (
+              <>
+                {/* Block 1: Profile Portal (Initials block) */}
+                <Link 
+                  to="/profile" 
+                  className="w-10 h-10 rounded-xl bg-zinc-900 border border-zinc-800 hover:border-zinc-700 flex items-center justify-center font-bold font-mono text-zinc-100 hover:text-amber-500 hover:bg-zinc-850/80 transition-all shadow-md"
+                  title="Profile Dashboard"
+                >
+                  {initials}
+                </Link>
 
-              <button
-                type="button"
-                onClick={() => signOut?.()}
-                className="h-10 px-4 rounded-xl bg-red-950/25 border border-red-900/30 hover:border-red-500/50 hover:bg-red-950/40 text-red-500 font-mono text-xs font-bold uppercase tracking-wider transition-all shadow-sm"
-                title="Logout Session"
-              >
-                Logout
-              </button>
-            </div>
-          ) : (
-            <>
-              <div className="w-10 h-10 rounded-xl bg-zinc-900 border border-zinc-800 flex items-center justify-center font-bold font-mono text-zinc-500 select-none shadow-md">
-                GST
-              </div>
+                {/* Block 2: Logout Button */}
+                <button
+                  type="button"
+                  onClick={() => signOut?.()}
+                  className="h-10 px-4 rounded-xl bg-red-950/25 border border-red-900/30 hover:border-red-500/50 hover:bg-red-950/40 text-red-500 font-mono text-xs font-bold uppercase tracking-wider transition-all shadow-sm"
+                  title="Logout Session"
+                >
+                  Logout
+                </button>
+              </>
+            ) : (
+              <>
+                {/* Fallback Block 1: GST (Guest) Indicator */}
+                <div className="w-10 h-10 rounded-xl bg-zinc-900 border border-zinc-800 flex items-center justify-center font-bold font-mono text-zinc-500 select-none shadow-md">
+                  GST
+                </div>
 
-              <button
-                type="button"
-                onClick={handleAuthTrigger}
-                className="h-10 px-5 bg-amber-500 hover:bg-amber-400 text-zinc-950 font-black font-mono text-xs uppercase tracking-wider rounded-xl transition-all shadow-md"
-              >
-                Sign In
-              </button>
-            </>
-          )}
+                {/* Fallback Block 2: Sign In button */}
+                <button
+                  type="button"
+                  onClick={handleAuthTrigger}
+                  className="h-10 px-5 bg-amber-500 hover:bg-amber-400 text-zinc-950 font-black font-mono text-xs uppercase tracking-wider rounded-xl transition-all shadow-md"
+                >
+                  Sign In
+                </button>
+              </>
+            )}
+          </div>
         </div>
       </nav>
 
       {/* 
         2. MOBILE VIEW (Preserved Dynamic Island)
-        Repositioned top-center with absolute safety triggers.
+        Remains top-pinned exactly as we configured it.
       */}
       <div className="md:hidden fixed top-3 left-1/2 -translate-x-1/2 z-[1001] flex flex-col items-center select-none">
         <div 
@@ -205,10 +220,6 @@ export default function DynamicIslandNav() {
                   {isActive('/profile') && <span className="w-1.5 h-1.5 rounded-full bg-amber-500" />}
                 </Link>
 
-                {/* 
-                  Mobile Logout Trigger:
-                  Renders as a red-accented navigation item at the bottom of the list when logged in [10].
-                */}
                 {user && (
                   <button
                     type="button"
@@ -226,7 +237,6 @@ export default function DynamicIslandNav() {
                 )}
               </div>
 
-              {/* Collapse Trigger */}
               <div 
                 onClick={() => setIsExpanded(false)}
                 className="flex justify-center pt-2 border-t border-zinc-900 cursor-pointer"
