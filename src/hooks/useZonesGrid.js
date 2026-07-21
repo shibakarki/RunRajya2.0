@@ -1,7 +1,8 @@
 import { useState, useEffect, useRef } from 'react';
 import { supabase } from '../lib/supabase';
 
-// Helper to calculate approximate distance in meters
+const FALLBACK_CENTER = { lat: 27.5291, lng: 83.447 }; // Centered near the middle of Rupandehi
+
 function getDistanceMeters(lat1, lon1, lat2, lon2) {
   const R = 6371000; 
   const dLat = ((lat2 - lat1) * Math.PI) / 180;
@@ -18,7 +19,7 @@ function getDistanceMeters(lat1, lon1, lat2, lon2) {
 
 /**
  * useZonesGrid – dynamically loads local grid cells in real-time.
- * Bypasses local IndexedDB caching and fetches active adjacent zones on-demand.
+ * If position is null/acquiring, uses the fallback center to load adjacent grids on load.
  * 
  * @param {Object} position - Active GPS coordinates { lat, lng }
  */
@@ -27,25 +28,24 @@ export function useZonesGrid(position) {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
 
-  // Track the last position used to query the database to prevent spamming
   const lastQueryPosRef = useRef(null);
 
   useEffect(() => {
-    if (!position || !position.lat || !position.lng) {
-      return;
-    }
+    // Falls back to the geographic center of the district if GPS is still acquiring
+    const activePosition = position && position.lat && position.lng 
+      ? position 
+      : FALLBACK_CENTER;
 
-    // Movement Throttle Check:
-    // Only fetch new cells if the user has moved more than 200m from their last queried location
+    // Movement Throttle Check
     if (lastQueryPosRef.current) {
       const distanceMoved = getDistanceMeters(
         lastQueryPosRef.current.lat,
         lastQueryPosRef.current.lng,
-        position.lat,
-        position.lng
+        activePosition.lat,
+        activePosition.lng
       );
       if (distanceMoved < 200) {
-        return; // Skip query if movement is minor
+        return; 
       }
     }
 
@@ -57,12 +57,11 @@ export function useZonesGrid(position) {
         // Bounding Box Range: 0.02 degrees latitude/longitude represents ~2.2km radius
         const rangeDegrees = 0.02;
 
-        // Call our Supabase RPC function to fetch only local adjacent zones
         const { data: localZones, error: fetchError } = await supabase.rpc(
           'get_local_zones',
           {
-            user_lat: position.lat,
-            user_lng: position.lng,
+            user_lat: activePosition.lat,
+            user_lng: activePosition.lng,
             range_deg: rangeDegrees
           }
         );
@@ -70,7 +69,7 @@ export function useZonesGrid(position) {
         if (fetchError) throw fetchError;
 
         setGrid(localZones || []);
-        lastQueryPosRef.current = position; // Lock new position reference
+        lastQueryPosRef.current = activePosition; 
       } catch (err) {
         console.error('Failed to load local zones from database:', err);
         setError(err.message || 'Error loading local zones.');
