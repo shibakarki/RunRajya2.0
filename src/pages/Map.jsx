@@ -27,16 +27,19 @@ function getDistanceMeters(lat1, lon1, lat2, lon2) {
       Math.cos((lat2 * Math.PI) / 180) *
       Math.sin(dLon / 2) *
       Math.sin(dLon / 2);
-  const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+  const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a)); 
   return R * c;
 }
 
 export default function MapPage() {
   const [followPlayer, setFollowPlayer] = useState(false);
+  
   const auth = useAuth();
   const user = auth?.session?.user;
 
   useOfflineSync();
+
+  const { grid } = useZonesGrid();
 
   const { ownedZones, evaluateCapture } = useZoneCaptures();
 
@@ -50,15 +53,9 @@ export default function MapPage() {
 
   const { progressPct, currentValueKm, targetValueKm } = useDailyGoal(distance, dailyTargetM);
 
-  // Refs to manage positional states
   const lastPositionRef = useRef(null);
-  
-  // Mutable Grid Reference:
-  // Breaks the Temporal Dead Zone (TDZ) by allowing useGPS to safely query 
-  // grid cells asynchronously without needing to declare useZonesGrid first.
   const gridRef = useRef([]);
 
-  // 1. Geolocation Sensor (Declared first, supplying position for useZonesGrid)
   const { position, gpsStatus, errorMsg } = useGPS((coords) => {
     if (sessionActive) {
       if (lastPositionRef.current) {
@@ -71,7 +68,6 @@ export default function MapPage() {
         addTrackedDistance(metersMoved);
       }
 
-      // Read from the mutable reference instead of the stale variable (TDZ Fix)
       if (gridRef.current && gridRef.current.length > 0) {
         evaluateCapture(coords, gridRef.current, sessionId, user?.id);
       }
@@ -79,28 +75,23 @@ export default function MapPage() {
     lastPositionRef.current = coords;
   });
 
-  // 2. Fetch adjacent zones (Consumes position from useGPS)
-  const { grid, loading: gridLoading } = useZonesGrid(position);
+  const { grid: loadedGrid, loading: gridLoading } = useZonesGrid(position);
 
-  // Keep the mutable Grid Reference synchronized on every data load
   useEffect(() => {
-    if (grid) {
-      gridRef.current = grid;
+    if (loadedGrid) {
+      gridRef.current = loadedGrid;
     }
-  }, [grid]);
+  }, [loadedGrid]);
 
-  // REACTIVE INSTANT CAPTURE
   useEffect(() => {
-    if (sessionActive && position && grid && grid.length > 0 && user?.id) {
+    if (sessionActive && position && gridRef.current && gridRef.current.length > 0 && user?.id) {
       console.log('Session activated. Executing initial zone capture check...');
-      evaluateCapture(position, grid, sessionId, user.id);
+      evaluateCapture(position, gridRef.current, sessionId, user.id);
     }
-  }, [sessionActive, position, grid, sessionId, user?.id, evaluateCapture]);
+  }, [sessionActive, position, gridRef.current, sessionId, user?.id, evaluateCapture]);
 
-  // Compass Magnetometer Sensor
   const { heading, requestPermission: requestCompassPermission } = useCompass();
 
-  // Hold-to-Lock progress state
   const [holdProgress, setHoldProgress] = useState(0);
   const holdIntervalRef = useRef(null);
 
@@ -140,9 +131,10 @@ export default function MapPage() {
   };
 
   return (
+    /* md:pt-20 forces page content down to prevent overlap with h-20 header */
     <div 
       onClick={handlePageClick} 
-      className="w-full h-[100dvh] flex flex-col md:flex-row bg-zinc-950 text-white overflow-hidden relative md:pt-16"
+      className="w-full h-[100dvh] flex flex-col md:flex-row bg-zinc-950 text-white overflow-hidden relative md:pt-20"
     >
       
       {/* 1. Desktop Sidebar Overlay Panel */}
@@ -178,7 +170,7 @@ export default function MapPage() {
             <div className="flex justify-between items-center text-xs">
               <span className="text-zinc-500">Local Sectors Loaded:</span>
               <span className="text-zinc-300 font-mono font-bold">
-                {gridLoading ? 'Syncing...' : `${grid?.length || 0} cells`}
+                {gridLoading ? 'Syncing...' : `${loadedGrid?.length || 0} cells`}
               </span>
             </div>
 
@@ -207,7 +199,7 @@ export default function MapPage() {
       <div className="flex-1 h-[65%] md:h-full relative w-full">
         <MapCanvas 
           position={position} 
-          zones={grid} 
+          zones={loadedGrid} 
           ownedZones={ownedZones} 
           following={followPlayer}
           heading={heading} 

@@ -20,7 +20,7 @@ export default function Home() {
   };
 
   return (
-    <div className="w-full min-h-screen bg-zinc-950 text-white flex flex-col items-center overflow-y-auto md:pt-16">
+    <div className="w-full min-h-screen bg-zinc-950 text-white flex flex-col items-center overflow-y-auto md:pt-20">
       
       {/* Tactical Header with capped max-width for 4K displays */}
       <header className="w-full max-w-7xl px-6 md:px-12 py-6 flex items-center justify-between border-b border-zinc-900 select-none mx-auto">

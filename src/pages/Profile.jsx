@@ -21,7 +21,7 @@ export default function Profile() {
   const { stats, loading: statsLoading, error: statsErr } = useProfileStats(user?.id);
   
   // Leaderboards Hooks (Local and Global)
-  const [activeTab, setActiveTab] = useState('local'); 
+  const [activeTab, setActiveTab] = useState('local'); // 'local' | 'global'
   const { rankings: localRankings, loading: localLoading, error: localErr } = useLeaderboard('rupandehi');
   const { isGlobalComingSoon } = useLeaderboard('global');
 
@@ -40,7 +40,9 @@ export default function Profile() {
     ? user.user_metadata.full_name
     : stats?.username || 'Explorer';
 
-  // Sync editing fields with database profiles values when editing initiates
+  // HOOKS RULE CORRECTION:
+  // Moved this useEffect to the top (above conditional returns) to ensure 
+  // it is executed in the exact same order on every render pass.
   useEffect(() => {
     if (stats) {
       const defaultName = stats.username === 'Explorer' && user?.user_metadata?.full_name
@@ -51,14 +53,6 @@ export default function Profile() {
       setEditTargetKm(Number((stats.dailyTargetM / 1000).toFixed(1))); 
     }
   }, [stats, isEditing, user]);
-
-  // Formats cumulative active seconds into readable hours/minutes
-  const formatTotalTime = (seconds) => {
-    if (!seconds || seconds <= 0) return '0 m';
-    const hrs = Math.floor(seconds / 3600);
-    const mins = Math.floor((seconds % 3600) / 60);
-    return hrs > 0 ? `${hrs}h ${mins}m` : `${mins}m`;
-  };
 
   const handleAuthTrigger = () => {
     const openFn = auth.openModal || auth.setModalOpen || auth.toggleModal || auth.requireAuth;
@@ -128,6 +122,13 @@ export default function Profile() {
       setFactionAlertConfirmed(false);
       window.location.reload();
     }
+  };
+
+  const formatTotalTime = (seconds) => {
+    if (!seconds || seconds <= 0) return '0 m';
+    const hrs = Math.floor(seconds / 3600);
+    const mins = Math.floor((seconds % 3600) / 60);
+    return hrs > 0 ? `${hrs}h ${mins}m` : `${mins}m`;
   };
 
   return (
