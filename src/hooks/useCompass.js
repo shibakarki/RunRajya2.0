@@ -1,14 +1,22 @@
 import { useState, useEffect, useCallback } from 'react';
+import { useAuth } from '../context/AuthContext';
 
 /**
  * useCompass – handles device orientation to track magnetometer heading.
- * Handles Apple user-gesture permission request patterns.
+ * Gates hardware access behind active authentication states.
  */
 export function useCompass() {
   const [heading, setHeading] = useState(0);
   const [permissionGranted, setPermissionGranted] = useState(false);
 
+  // Resolve active session to gate hardware access
+  const auth = useAuth();
+  const userId = auth?.session?.user?.id;
+
   const requestPermission = useCallback(async () => {
+    // SECURITY GATE: Prevent calibration prompts if signed out
+    if (!userId) return false;
+
     if (
       typeof DeviceOrientationEvent !== 'undefined' &&
       typeof DeviceOrientationEvent.requestPermission === 'function'
@@ -23,40 +31,39 @@ export function useCompass() {
         console.error('Magnetometer permission denied:', err);
       }
     } else {
-      // Non-iOS device or browser context where explicit gesture permission is not required
       setPermissionGranted(true);
       return true;
     }
     return false;
-  }, []);
+  }, [userId]);
 
   useEffect(() => {
+    // SECURITY GATE: Prevent listener registration if signed out
+    if (!userId || !permissionGranted) {
+      return;
+    }
+
     const handleOrientation = (e) => {
       let absoluteHeading = 0;
       
       if (e.webkitCompassHeading !== undefined) {
-        // iOS Safari Native compass heading
         absoluteHeading = e.webkitCompassHeading;
       } else if (e.alpha !== null) {
-        // Absolute magnetometer heading standard: 360 - alpha
         absoluteHeading = 360 - e.alpha;
       }
       
       setHeading(Math.round(absoluteHeading));
     };
 
-    // Use absolute magnetometer event when available to ignore local magnetic drift
     const isAbsoluteSupported = 'ondeviceorientationabsolute' in window;
     const eventName = isAbsoluteSupported ? 'deviceorientationabsolute' : 'deviceorientation';
 
-    if (permissionGranted) {
-      window.addEventListener(eventName, handleOrientation);
-    }
+    window.addEventListener(eventName, handleOrientation);
 
     return () => {
       window.removeEventListener(eventName, handleOrientation);
     };
-  }, [permissionGranted]);
+  }, [permissionGranted, userId]);
 
   return { 
     heading, 

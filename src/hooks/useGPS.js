@@ -1,8 +1,8 @@
 import { useState, useEffect, useRef } from 'react';
+import { useAuth } from '../context/AuthContext';
 
-// Distance calculation using the Haversine formula
 function getDistanceMeters(lat1, lon1, lat2, lon2) {
-  const R = 6371000; // Radius of Earth in meters
+  const R = 6371000; 
   const dLat = ((lat2 - lat1) * Math.PI) / 180;
   const dLon = ((lon2 - lon1) * Math.PI) / 180;
   const a =
@@ -17,10 +17,13 @@ function getDistanceMeters(lat1, lon1, lat2, lon2) {
 
 export function useGPS(onValidPositionUpdate) {
   const [position, setPosition] = useState(null);
-  const [gpsStatus, setGpsStatus] = useState('acquiring'); // 'acquiring' | 'locked' | 'error'
+  const [gpsStatus, setGpsStatus] = useState('acquiring'); 
   const [errorMsg, setErrorMsg] = useState(null);
   
-  // Ref stores the latest callback to prevent stale closures inside the watchPosition event
+  // Resolve active session to gate hardware access
+  const auth = useAuth();
+  const userId = auth?.session?.user?.id;
+
   const callbackRef = useRef(onValidPositionUpdate);
   useEffect(() => {
     callbackRef.current = onValidPositionUpdate;
@@ -30,6 +33,13 @@ export function useGPS(onValidPositionUpdate) {
   const lastTimestampRef = useRef(0);
 
   useEffect(() => {
+    // SECURITY GATE: Prevent GPS initialization if the explorer is signed out
+    if (!userId) {
+      setGpsStatus('error');
+      setErrorMsg('Authentication required to initialize GPS sensors.');
+      return;
+    }
+
     if (!navigator.geolocation) {
       setGpsStatus('error');
       setErrorMsg('Geolocation is not supported by your browser.');
@@ -41,13 +51,11 @@ export function useGPS(onValidPositionUpdate) {
         const { latitude, longitude, accuracy } = pos.coords;
         const timestamp = pos.timestamp;
 
-        // GPS Threshold constraint check (80m)
         if (accuracy > 80) {
           setGpsStatus('acquiring');
           return;
         }
 
-        // Anti-cheat verification
         if (lastPositionRef.current) {
           const distanceMoved = getDistanceMeters(
             lastPositionRef.current.lat,
@@ -60,9 +68,8 @@ export function useGPS(onValidPositionUpdate) {
 
           if (timeElapsedSeconds > 0) {
             const speedMps = distanceMoved / timeElapsedSeconds;
-            // Speed constraint check: ~15 km/h limit (4.16 m/s)
             if (speedMps > 4.16) {
-              console.warn(`GPS point rejected. Calculated speed (${(speedMps * 3.6).toFixed(1)} km/h) exceeded limits.`);
+              console.warn(`GPS point rejected. Speed limit exceeded.`);
               return; 
             }
           }
@@ -75,7 +82,6 @@ export function useGPS(onValidPositionUpdate) {
         lastPositionRef.current = validCoords;
         lastTimestampRef.current = timestamp;
 
-        // Always invoke the latest mutable reference callback (stale-closure fix)
         if (callbackRef.current) {
           callbackRef.current(validCoords);
         }
@@ -93,7 +99,7 @@ export function useGPS(onValidPositionUpdate) {
     );
 
     return () => navigator.geolocation.clearWatch(watchId);
-  }, []);
+  }, [userId]); // Re-bind securely when authentication state changes
 
   return { position, gpsStatus, errorMsg };
 }

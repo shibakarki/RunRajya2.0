@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { Link, useLocation } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 
@@ -32,16 +32,12 @@ export default function DynamicIslandNav() {
 
   const isActive = (path) => location.pathname === path;
 
-  const handleAuthTrigger = () => {
-    const openFn = auth?.openModal || auth?.setModalOpen || auth?.toggleModal || auth?.requireAuth;
-    if (typeof openFn === 'function') {
-      if (openFn.name === 'bound dispatchAction' || openFn.toString().includes('dispatch')) {
-        openFn(true);
-      } else {
-        openFn();
-      }
+  // Updated to pass a safe, explicit empty callback parameter to prevent no-ops
+  const handleAuthTrigger = useCallback(() => {
+    if (typeof auth?.requireAuth === 'function') {
+      auth.requireAuth(() => {}); // Executes context requirements safely
     }
-  };
+  }, [auth]);
 
   const getInitials = (name) => {
     if (!name) return 'EX';
@@ -58,7 +54,7 @@ export default function DynamicIslandNav() {
   return (
     <>
       {/* 
-        1. DESKTOP VIEW (NavMenu)
+        1. DESKTOP VIEW (Redesigned NavMenu)
         Parent nav container set to bg-transparent with no blur filters.
       */}
       <nav className="hidden md:flex fixed top-0 left-0 right-0 h-20 bg-transparent z-[1000] items-center justify-between px-8 select-none">
@@ -66,7 +62,6 @@ export default function DynamicIslandNav() {
         {/* Left Section: Single floating block containing full text typography logo */}
         <div className="flex items-center">
           <div className="flex flex-col items-start gap-1.5 p-3 bg-zinc-950/90 border border-zinc-900 rounded-2xl shadow-xl">
-            {/* Bold typography logo "RUNRAJYA" */}
             <Link 
               to="/" 
               className="text-base font-black tracking-widest text-white hover:text-amber-500 transition-colors select-none font-sans leading-none pb-0.5"
@@ -74,7 +69,6 @@ export default function DynamicIslandNav() {
               RUNRAJYA
             </Link>
             
-            {/* Active Status bar stacked below logo */}
             <div className={`flex items-center gap-1 px-1.5 py-0.5 rounded border text-[8px] font-mono uppercase tracking-wider ${
               networkOnline ? 'border-emerald-900/40 text-emerald-500 bg-emerald-950/10' : 'border-red-900/40 text-red-500 bg-red-950/10'
             }`}>
@@ -109,6 +103,7 @@ export default function DynamicIslandNav() {
 
         {/* Right Section: Split profile initials block + logout block */}
         <div className="flex items-center">
+          {/* Shared container background block remains consistent */}
           <div className="flex items-center gap-3 p-2 bg-zinc-950/90 border border-zinc-900 rounded-2xl shadow-xl h-14">
             {user ? (
               <>
@@ -132,21 +127,18 @@ export default function DynamicIslandNav() {
                 </button>
               </>
             ) : (
-              <>
-                {/* Fallback Block 1: GST (Guest) Indicator */}
-                <div className="w-10 h-10 rounded-xl bg-zinc-900 border border-zinc-800 flex items-center justify-center font-bold font-mono text-zinc-500 select-none shadow-md">
-                  GST
-                </div>
-
-                {/* Fallback Block 2: Sign In button */}
-                <button
-                  type="button"
-                  onClick={handleAuthTrigger}
-                  className="h-10 px-5 bg-amber-500 hover:bg-amber-400 text-zinc-950 font-black font-mono text-xs uppercase tracking-wider rounded-xl transition-all shadow-md"
-                >
-                  Sign In
-                </button>
-              </>
+              /* 
+                Unauthenticated state:
+                The GST (Guest) monogram block has been completely removed [10].
+                Only the Sign In button is displayed inside the right background container [10].
+              */
+              <button
+                type="button"
+                onClick={handleAuthTrigger}
+                className="h-10 px-5 bg-amber-500 hover:bg-amber-400 text-zinc-950 font-black font-mono text-xs uppercase tracking-wider rounded-xl transition-all shadow-md"
+              >
+                Sign In
+              </button>
             )}
           </div>
         </div>

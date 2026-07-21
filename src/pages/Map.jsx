@@ -33,29 +33,36 @@ function getDistanceMeters(lat1, lon1, lat2, lon2) {
 
 export default function MapPage() {
   const [followPlayer, setFollowPlayer] = useState(false);
-  
   const auth = useAuth();
   const user = auth?.session?.user;
 
+  // 1. Initialize background sync loop
   useOfflineSync();
 
-  const { grid } = useZonesGrid();
+  // 2. Fetch the 5,212 cells from database/cache
+  const { grid, loading: gridLoading } = useZonesGrid(position);
 
+  // 3. Initialize capture handler
   const { ownedZones, evaluateCapture } = useZoneCaptures();
 
+  // Fetch logged-in user profile statistics (for customized daily goals target)
   const { stats } = useProfileStats(user?.id);
   const dailyTargetM = stats?.dailyTargetM || 5000; 
 
   const { isLocked, lockScreen, unlockScreen } = usePocketLock();
   
+  // Destructure active run tracking statistics
   const session = useRunSession(); 
   const { duration, distance, calories, sessionActive, sessionId, addTrackedDistance } = session;
 
+  // Compute daily goal metrics dynamically using custom target
   const { progressPct, currentValueKm, targetValueKm } = useDailyGoal(distance, dailyTargetM);
 
+  // Refs to manage positional states
   const lastPositionRef = useRef(null);
   const gridRef = useRef([]);
 
+  // 4. Geolocation Sensor: Evaluates distance traveled and sector captures on every physical movement
   const { position, gpsStatus, errorMsg } = useGPS((coords) => {
     if (sessionActive) {
       if (lastPositionRef.current) {
@@ -75,14 +82,14 @@ export default function MapPage() {
     lastPositionRef.current = coords;
   });
 
-  const { grid: loadedGrid, loading: gridLoading } = useZonesGrid(position);
-
+  // Keep the mutable Grid Reference synchronized on every data load
   useEffect(() => {
-    if (loadedGrid) {
-      gridRef.current = loadedGrid;
+    if (grid) {
+      gridRef.current = grid;
     }
-  }, [loadedGrid]);
+  }, [grid]);
 
+  // REACTIVE INSTANT CAPTURE
   useEffect(() => {
     if (sessionActive && position && gridRef.current && gridRef.current.length > 0 && user?.id) {
       console.log('Session activated. Executing initial zone capture check...');
@@ -90,14 +97,25 @@ export default function MapPage() {
     }
   }, [sessionActive, position, gridRef.current, sessionId, user?.id, evaluateCapture]);
 
+  // Compass Magnetometer Sensor
   const { heading, requestPermission: requestCompassPermission } = useCompass();
 
+  // Hold-to-Lock progress state
   const [holdProgress, setHoldProgress] = useState(0);
   const holdIntervalRef = useRef(null);
 
   const handlePageClick = async () => {
     if (requestCompassPermission) {
       await requestCompassPermission();
+    }
+  };
+
+  // Safe launcher triggers permissions checklists before initiating run sessions
+  const handleAuthTrigger = () => {
+    if (typeof auth.requireAuth === 'function') {
+      auth.requireAuth(() => {
+        window.location.reload();
+      });
     }
   };
 
@@ -130,8 +148,36 @@ export default function MapPage() {
     setHoldProgress(0);
   };
 
+  // SECURITY GATE: Prevent page rendering and restrict mobile access if unauthenticated
+  if (!user) {
+    return (
+      <div className="w-full h-full min-h-screen bg-zinc-950 text-white flex flex-col items-center justify-center p-6 select-none relative">
+        <div className="max-w-md w-full text-center border border-zinc-900 bg-zinc-900/20 p-8 rounded-2xl flex flex-col items-center gap-4">
+          <div className="p-3 bg-amber-950/30 border border-amber-900/50 text-amber-500 rounded-full animate-pulse">
+            <svg className="w-8 h-8" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" d="M9 20l-5.447-2.724A1 1 0 013 16.382V5.618a1 1 0 011.447-.894L9 7m0 13l6-3m-6 3V7m6 10l4.553 2.276A1 1 0 0021 18.382V7.618a1 1 0 00-.553-.894L15 4m0 13V4m0 0L9 7" />
+            </svg>
+          </div>
+          <h2 className="text-lg font-bold tracking-tight">Grid Access Restricted</h2>
+          <p className="text-xs text-zinc-400">
+            You must authenticate your explorer account to access the live tactical grid, view territory claims, and start run sessions.
+          </p>
+          <button
+            type="button"
+            onClick={handleAuthTrigger}
+            className="w-full mt-2 py-3 bg-amber-500 hover:bg-amber-400 text-zinc-950 font-bold rounded-xl text-xs uppercase tracking-wider transition-colors"
+          >
+            Sign In to Unlock Map
+          </button>
+        </div>
+
+        <DynamicIslandNav />
+        <AuthModal />
+      </div>
+    );
+  }
+
   return (
-    /* md:pt-20 forces page content down to prevent overlap with h-20 header */
     <div 
       onClick={handlePageClick} 
       className="w-full h-[100dvh] flex flex-col md:flex-row bg-zinc-950 text-white overflow-hidden relative md:pt-20"
@@ -145,6 +191,7 @@ export default function MapPage() {
         </div>
 
         <div className="flex-1 p-6 flex flex-col gap-6">
+          {/* GoalRing dynamically bound to progress metrics */}
           <div className="flex justify-center bg-zinc-900/10 border border-zinc-900 rounded-xl p-4">
             <GoalRing 
               progressPct={progressPct} 
@@ -167,10 +214,11 @@ export default function MapPage() {
               )}
             </div>
             
+            {/* Live Database Diagnostics Row */}
             <div className="flex justify-between items-center text-xs">
               <span className="text-zinc-500">Local Sectors Loaded:</span>
               <span className="text-zinc-300 font-mono font-bold">
-                {gridLoading ? 'Syncing...' : `${loadedGrid?.length || 0} cells`}
+                {gridLoading ? 'Syncing...' : `${grid?.length || 0} cells`}
               </span>
             </div>
 
@@ -182,6 +230,7 @@ export default function MapPage() {
         </div>
 
         <div className="border-t border-zinc-900 p-4 bg-zinc-950">
+          {/* Forward the parent session instance to FieldHUD */}
           <FieldHUD 
             session={session} 
             followPlayer={followPlayer} 
@@ -199,7 +248,7 @@ export default function MapPage() {
       <div className="flex-1 h-[65%] md:h-full relative w-full">
         <MapCanvas 
           position={position} 
-          zones={loadedGrid} 
+          zones={grid} 
           ownedZones={ownedZones} 
           following={followPlayer}
           heading={heading} 
