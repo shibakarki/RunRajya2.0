@@ -4,6 +4,9 @@ import L from 'leaflet';
 import 'leaflet/dist/leaflet.css';
 import ZoneLayer from './ZoneLayer'; 
 
+// Import your precise district boundary data file from your data directory
+import rupandehiGeoJson from '../data/rupandehi_boundary.json'; 
+
 const FALLBACK_CENTER = [27.5291, 83.447];
 
 // Giant outer boundary covering the globe
@@ -14,19 +17,63 @@ const WORLD_OUTER_RING = [
   [-90, -180]
 ];
 
-// 100% stable, precise, self-contained coordinate path of Rupandehi District (Nepal)
-// Completely removes any dependency on the src/data/ directory during bundling
-const RUPANDEHI_BOUNDARY = [
-  [27.420, 83.150],
-  [27.550, 83.120],
-  [27.700, 83.180],
-  [27.820, 83.280],
-  [27.850, 83.450],
-  [27.780, 83.580],
-  [27.650, 83.620],
-  [27.450, 83.600],
-  [27.350, 83.450]
-];
+/**
+ * Robust GIS Parser:
+ * Auto-detects whether coordinates are stored as objects ({lat, lng} / {latitude, longitude})
+ * or standard arrays, swaps axes only if needed, and guarantees valid numeric values.
+ */
+const getLeafletBoundaryCoords = (geoJson) => {
+  try {
+    let rawCoords = [];
+    const geometry = geoJson.features 
+      ? geoJson.features[0].geometry 
+      : geoJson.geometry;
+
+    if (geometry.type === 'Polygon') {
+      rawCoords = geometry.coordinates[0];
+    } else if (geometry.type === 'MultiPolygon') {
+      rawCoords = geometry.coordinates[0][0];
+    } else if (Array.isArray(geoJson)) {
+      rawCoords = geoJson;
+    }
+
+    if (rawCoords && rawCoords.length > 0) {
+      const firstPoint = rawCoords[0];
+      
+      let isObject = false;
+      let firstVal = 0;
+      
+      // Auto-detect structure type
+      if (firstPoint && typeof firstPoint === 'object' && !Array.isArray(firstPoint)) {
+        isObject = true;
+        firstVal = firstPoint.lng || firstPoint.longitude || 0;
+      } else if (Array.isArray(firstPoint)) {
+        firstVal = firstPoint[0];
+      }
+
+      // Nepal coordinates sit around Lng 83.x / Lat 27.x
+      const needsSwap = firstVal > 50;
+
+      return rawCoords.map(coord => {
+        if (isObject) {
+          const latVal = coord.lat !== undefined ? coord.lat : coord.latitude;
+          const lngVal = coord.lng !== undefined ? coord.lng : coord.longitude;
+          return [Number(latVal) || 0, Number(lngVal) || 0];
+        } else if (Array.isArray(coord)) {
+          if (needsSwap) {
+            return [Number(coord[1]) || 0, Number(coord[0]) || 0]; // Swap Lng/Lat to Lat/Lng
+          } else {
+            return [Number(coord[0]) || 0, Number(coord[1]) || 0]; // Keep Lat/Lng
+          }
+        }
+        return [0, 0];
+      });
+    }
+  } catch (err) {
+    console.error('Error parsing dynamic Rupandehi boundary data:', err);
+  }
+  return null;
+};
 
 const createPlayerIcon = (heading = 0) => {
   return L.divIcon({
@@ -97,7 +144,17 @@ export default function MapCanvas({
   currentUserId,
   currentUserFactionId 
 }) {
+  const [boundary, setBoundary] = useState([]);
   const center = position ? [position.lat, position.lng] : FALLBACK_CENTER;
+
+  useEffect(() => {
+    if (rupandehiGeoJson) {
+      const parsedCoords = getLeafletBoundaryCoords(rupandehiGeoJson);
+      if (parsedCoords) {
+        setBoundary(parsedCoords);
+      }
+    }
+  }, []);
 
   return (
     <div className="w-full h-full relative bg-zinc-950">
@@ -119,19 +176,21 @@ export default function MapCanvas({
         <FollowController position={position} following={following} />
 
         {/* 
-          Inverted Polygon Mask using the self-contained coordinates:
+          Inverted Polygon Mask using your custom boundary:
           Darkens the outer world ring while punching out a clear hole for Rupandehi.
         */}
-        <Polygon
-          positions={[WORLD_OUTER_RING, RUPANDEHI_BOUNDARY]}
-          pathOptions={{
-            color: '#d97706', // Amber outline
-            weight: 2,
-            dasharray: '5, 5',
-            fillColor: '#000000',
-            fillOpacity: 0.65, // Darkens outside world by 65%
-          }}
-        />
+        {boundary.length > 0 && (
+          <Polygon
+            positions={[WORLD_OUTER_RING, boundary]}
+            pathOptions={{
+              color: '#d97706', // Amber outline
+              weight: 2,
+              dashArray: '5, 5',
+              fillColor: '#000000',
+              fillOpacity: 0.65, // Darkens outside world by 65%
+            }}
+          />
+        )}
 
         <ZoneLayer 
           zones={zones} 
