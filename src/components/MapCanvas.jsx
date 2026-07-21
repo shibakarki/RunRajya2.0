@@ -4,12 +4,12 @@ import L from 'leaflet';
 import 'leaflet/dist/leaflet.css';
 import ZoneLayer from './ZoneLayer'; 
 
-// Import your precise district boundary data file from your data directory
-import rupandehiGeoJson from '../data/rupandehi_boundary.json'; 
+// Change this line to '../data/rupandehi.json' or '../data/rupandehi_boundary.json'
+// depending on what the exact file name is inside your src/data/ folder!
+import rupandehiGeoJson from '../data/rupandehi.json'; 
 
 const FALLBACK_CENTER = [27.5291, 83.447];
 
-// Giant outer boundary covering the globe
 const WORLD_OUTER_RING = [
   [90, -180],
   [90, 180],
@@ -20,7 +20,7 @@ const WORLD_OUTER_RING = [
 /**
  * Robust GIS Parser:
  * Auto-detects whether coordinates are stored as objects ({lat, lng} / {latitude, longitude})
- * or standard arrays, swaps axes only if needed, and guarantees valid numeric values.
+ * or standard arrays, and guarantees valid numeric values in [latitude, longitude] order.
  */
 const getLeafletBoundaryCoords = (geoJson) => {
   try {
@@ -175,19 +175,15 @@ export default function MapCanvas({
 
         <FollowController position={position} following={following} />
 
-        {/* 
-          Inverted Polygon Mask using your custom boundary:
-          Darkens the outer world ring while punching out a clear hole for Rupandehi.
-        */}
         {boundary.length > 0 && (
           <Polygon
             positions={[WORLD_OUTER_RING, boundary]}
             pathOptions={{
-              color: '#d97706', // Amber outline
+              color: '#d97706', 
               weight: 2,
               dashArray: '5, 5',
               fillColor: '#000000',
-              fillOpacity: 0.65, // Darkens outside world by 65%
+              fillOpacity: 0.65, 
             }}
           />
         )}
