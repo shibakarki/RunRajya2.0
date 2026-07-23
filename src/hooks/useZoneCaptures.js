@@ -1,5 +1,6 @@
 import { useState, useCallback } from 'react';
 import { supabase } from '../lib/supabase';
+import { openDB } from '../lib/offlineDb'; // Imported central database helper
 
 const FACTION_MAP = {
   'lumbini_guardians': 1,
@@ -10,7 +11,6 @@ const FACTION_MAP = {
   '1': 1, '2': 2, '3': 3, '4': 4, '5': 5
 };
 
-// Ray-casting algorithm to evaluate coordinate inclusion inside polygon bounds
 function isPointInPolygon(point, polygon) {
   const x = point.lat;
   const y = point.lng;
@@ -28,7 +28,6 @@ function isPointInPolygon(point, polygon) {
   return inside;
 }
 
-// Distance calculation using the Haversine formula
 function getDistanceMeters(lat1, lon1, lat2, lon2) {
   const R = 6371000; 
   const dLat = ((lat2 - lat1) * Math.PI) / 180;
@@ -53,7 +52,6 @@ export function useZoneCaptures() {
 
     let matchedZone = null;
 
-    // Filter and parse geometries defensively first to prevent string-loop crashes
     const parsedGrid = activeGrid.map(zone => {
       try {
         const coords = typeof zone.boundary === 'string' ? JSON.parse(zone.boundary) : zone.boundary;
@@ -63,13 +61,11 @@ export function useZoneCaptures() {
       }
     });
 
-    // A. First Check: Standard ray-casting polygon math
     matchedZone = parsedGrid.find((zone) => 
       Array.isArray(zone.parsedBoundary) && zone.parsedBoundary.length > 0 && 
       isPointInPolygon(currentPosition, zone.parsedBoundary)
     );
 
-    // B. Second Check (Guaranteed Proximity Fallback): Find closest cell center and capture if within 400m
     if (!matchedZone) {
       let closestZone = null;
       let minDistance = Infinity;
@@ -100,7 +96,6 @@ export function useZoneCaptures() {
         }
       });
 
-      // Shifting check threshold to 400m (covers 500m cells corner diagonal limits)
       if (closestZone && minDistance <= 400) {
         matchedZone = closestZone;
       }
@@ -110,7 +105,6 @@ export function useZoneCaptures() {
       const nowISO = new Date().toISOString();
       let synced = false;
 
-      // 1. Paint territory green in the local UI immediately
       setOwnedZones((prev) => ({
         ...prev,
         [matchedZone.id]: {
@@ -119,14 +113,12 @@ export function useZoneCaptures() {
         }
       }));
 
-      // 2. If online, save instantly to Supabase
       if (navigator.onLine) {
         try {
           const { data: { session } } = await supabase.auth.getSession();
           const rawFaction = session?.user?.user_metadata?.faction_id;
           const factionId = FACTION_MAP[rawFaction] || Number(rawFaction) || 1;
 
-          // A. Update the zone details instantly
           const { error: claimErr } = await supabase
             .from('zones')
             .update({
@@ -137,7 +129,6 @@ export function useZoneCaptures() {
             .eq('id', matchedZone.id);
 
           if (!claimErr) {
-            // B. Log the audit trail record instantly
             const { error: auditErr } = await supabase
               .from('captures')
               .insert({
@@ -165,22 +156,18 @@ export function useZoneCaptures() {
         }
       }
 
-      // 3. Queue capture state in local IndexedDB (RunRajyaOfflineDB v2)
       try {
-        const dbRequest = indexedDB.open('RunRajyaOfflineDB', 2);
-        dbRequest.onsuccess = () => {
-          const db = dbRequest.result;
-          const tx = db.transaction('captures', 'readwrite');
-          const store = tx.objectStore('captures');
-          
-          store.put({
-            zone_id: matchedZone.id,
-            session_id: sessionId,
-            captured_at: nowISO,
-            owner_id: currentUserId,
-            synced: synced 
-          });
-        };
+        const db = await openDB(); // Access database safely
+        const tx = db.transaction('captures', 'readwrite');
+        const store = tx.objectStore('captures');
+        
+        store.put({
+          zone_id: matchedZone.id,
+          session_id: sessionId,
+          captured_at: nowISO,
+          owner_id: currentUserId,
+          synced: synced 
+        });
       } catch (err) {
         console.error('Failed to update local IndexedDB cache:', err);
       }

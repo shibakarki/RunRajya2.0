@@ -1,5 +1,6 @@
 import { useState, useEffect, useCallback } from 'react';
 import { supabase } from '../lib/supabase';
+import { openDB } from '../lib/offlineDb'; // Imported central database helper
 
 const FACTION_MAP = {
   'lumbini_guardians': 1,
@@ -27,120 +28,116 @@ export function useOfflineSync() {
         return;
       }
 
-      const dbRequest = indexedDB.open('RunRajyaOfflineDB', 2);
-      dbRequest.onsuccess = async () => {
-        const db = dbRequest.result;
+      const db = await openDB(); // Access database safely
 
-        // ==========================================
-        // 1. SYNCHRONIZE PENDING TRACES (SESSIONS)
-        // ==========================================
-        const traceReadTx = db.transaction('traces', 'readonly');
-        const traceReadStore = traceReadTx.objectStore('traces');
-        
-        const unsyncedTraces = await new Promise((res) => {
-          const req = traceReadStore.getAll();
-          req.onsuccess = () => res(req.result.filter(t => !t.synced));
-          req.onerror = () => res([]);
-        });
+      // ==========================================
+      // 1. SYNCHRONIZE PENDING TRACES (SESSIONS)
+      // ==========================================
+      const traceReadTx = db.transaction('traces', 'readonly');
+      const traceReadStore = traceReadTx.objectStore('traces');
+      
+      const unsyncedTraces = await new Promise((res) => {
+        const req = traceReadStore.getAll();
+        req.onsuccess = () => res(req.result.filter(t => !t.synced));
+        req.onerror = () => res([]);
+      });
 
-        const succeededTraceIds = [];
-        for (const trace of unsyncedTraces) {
-          const { error: sessionErr } = await supabase
-            .from('sessions')
-            .upsert({
-              id: trace.session_id,
-              user_id: userId, 
-              distance_m: trace.distance_m,
-              calories: trace.calories_kcal,
-              started_at: trace.timestamp, 
-              status: trace.status,
-              duration_s: trace.duration_s // Synced duration metadata to Database
-            });
+      const succeededTraceIds = [];
+      for (const trace of unsyncedTraces) {
+        const { error: sessionErr } = await supabase
+          .from('sessions')
+          .upsert({
+            id: trace.session_id,
+            user_id: userId, 
+            distance_m: trace.distance_m,
+            calories: trace.calories_kcal,
+            started_at: trace.timestamp, 
+            status: trace.status,
+            duration_s: trace.duration_s 
+          });
 
-          if (!sessionErr) {
-            succeededTraceIds.push(trace.id);
-          } else {
-            console.error('Failed to sync session trace:', sessionErr.message);
-          }
+        if (!sessionErr) {
+          succeededTraceIds.push(trace.id);
+        } else {
+          console.error('Failed to sync session trace:', sessionErr.message);
         }
+      }
 
-        if (succeededTraceIds.length > 0) {
-          const traceWriteTx = db.transaction('traces', 'readwrite');
-          const traceWriteStore = traceWriteTx.objectStore('traces');
-          for (const id of succeededTraceIds) {
-            traceWriteStore.delete(id);
-          }
+      if (succeededTraceIds.length > 0) {
+        const traceWriteTx = db.transaction('traces', 'readwrite');
+        const traceWriteStore = traceWriteTx.objectStore('traces');
+        for (const id of succeededTraceIds) {
+          traceWriteStore.delete(id);
         }
+      }
 
-        // ==========================================
-        // 2. SYNCHRONIZE CAPTURES (ZONES)
-        // ==========================================
-        const capReadTx = db.transaction('captures', 'readonly');
-        const capReadStore = capReadTx.objectStore('captures');
+      // ==========================================
+      // 2. SYNCHRONIZE CAPTURES (ZONES)
+      // ==========================================
+      const capReadTx = db.transaction('captures', 'readonly');
+      const capReadStore = capReadTx.objectStore('captures');
 
-        const unsyncedCaps = await new Promise((res) => {
-          const req = capReadStore.getAll();
-          req.onsuccess = () => res(req.result.filter(c => !c.synced));
-          req.onerror = () => res([]);
-        });
+      const unsyncedCaps = await new Promise((res) => {
+        const req = capReadStore.getAll();
+        req.onsuccess = () => res(req.result.filter(c => !c.synced));
+        req.onerror = () => res([]);
+      });
 
-        const succeededCapIds = [];
-        for (const cap of unsyncedCaps) {
-          const { data: serverZone, error: zoneErr } = await supabase
-            .from('zones')
-            .select('captured_at')
-            .eq('id', cap.zone_id)
-            .maybeSingle();
+      const succeededCapIds = [];
+      for (const cap of unsyncedCaps) {
+        const { data: serverZone, error: zoneErr } = await supabase
+          .from('zones')
+          .select('captured_at')
+          .eq('id', cap.zone_id)
+          .maybeSingle();
 
-          if (!zoneErr) {
-            const serverCapturedAt = serverZone?.captured_at ? new Date(serverZone.captured_at).getTime() : 0;
-            const localCapturedAt = new Date(cap.captured_at).getTime();
+        if (!zoneErr) {
+          const serverCapturedAt = serverZone?.captured_at ? new Date(serverZone.captured_at).getTime() : 0;
+          const localCapturedAt = new Date(cap.captured_at).getTime();
 
-            // First physical arrival wins: Sync if local stamp is older than current server stamp
-            if (!serverZone?.captured_at || localCapturedAt < serverCapturedAt) {
-              const rawFaction = session?.user?.user_metadata?.faction_id;
-              const factionId = FACTION_MAP[rawFaction] || Number(rawFaction) || 1;
+          if (!serverZone?.captured_at || localCapturedAt < serverCapturedAt) {
+            const rawFaction = session?.user?.user_metadata?.faction_id;
+            const factionId = FACTION_MAP[rawFaction] || Number(rawFaction) || 1;
 
-              const { error: claimErr } = await supabase
-                .from('zones')
-                .update({
-                  owner_id: cap.owner_id,
-                  captured_at: cap.captured_at,
-                  faction_id: factionId
-                })
-                .eq('id', cap.zone_id);
+            const { error: claimErr } = await supabase
+              .from('zones')
+              .update({
+                owner_id: cap.owner_id,
+                captured_at: cap.captured_at,
+                faction_id: factionId
+              })
+              .eq('id', cap.zone_id);
 
-              if (!claimErr) {
-                const { error: auditErr } = await supabase
-                  .from('captures')
-                  .insert({
-                    session_id: cap.session_id,
-                    zone_id: cap.zone_id,
-                    captured_at: cap.captured_at
-                  });
-                
-                if (!auditErr) {
-                  succeededCapIds.push(cap.zone_id);
-                } else {
-                  console.error('Failed to log capture audit:', auditErr.message);
-                }
+            if (!claimErr) {
+              const { error: auditErr } = await supabase
+                .from('captures')
+                .insert({
+                  session_id: cap.session_id,
+                  zone_id: cap.zone_id,
+                  captured_at: cap.captured_at
+                });
+              
+              if (!auditErr) {
+                succeededCapIds.push(cap.zone_id);
               } else {
-                console.error('Failed to update zone claim in database:', claimErr.message);
+                console.error('Failed to log capture audit:', auditErr.message);
               }
             } else {
-              succeededCapIds.push(cap.zone_id);
+              console.error('Failed to update zone claim in database:', claimErr.message);
             }
+          } else {
+            succeededCapIds.push(cap.zone_id);
           }
         }
+      }
 
-        if (succeededCapIds.length > 0) {
-          const capWriteTx = db.transaction('captures', 'readwrite');
-          const capWriteStore = capWriteTx.objectStore('captures');
-          for (const id of succeededCapIds) {
-            capWriteStore.delete(id);
-          }
+      if (succeededCapIds.length > 0) {
+        const capWriteTx = db.transaction('captures', 'readwrite');
+        const capWriteStore = capWriteTx.objectStore('captures');
+        for (const id of succeededCapIds) {
+          capWriteStore.delete(id);
         }
-      };
+      }
     } catch (e) {
       console.error('Synchronization failed:', e);
     } finally {
@@ -158,7 +155,6 @@ export function useOfflineSync() {
     window.addEventListener('online', handleOnline);
     window.addEventListener('offline', handleOffline);
 
-    // Run safe initial check
     if (isOnline) {
       performSync();
     }

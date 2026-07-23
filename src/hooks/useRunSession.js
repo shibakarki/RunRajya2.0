@@ -1,5 +1,6 @@
 import { useState, useEffect, useRef } from 'react';
 import { useCalorieCounter } from './useCalorieCounter';
+import { openDB } from '../lib/offlineDb'; // Imported central database helper
 
 function generateUUID() {
   return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, (c) => {
@@ -78,9 +79,7 @@ export function useRunSession() {
     
     // Save final stats record to IndexedDB sync queue
     try {
-      const request = indexedDB.open('RunRajyaOfflineDB', 2);
-      request.onsuccess = () => {
-        const db = request.result;
+      openDB().then((db) => { // Access database safely
         const tx = db.transaction('traces', 'readwrite');
         const store = tx.objectStore('traces');
         
@@ -88,19 +87,19 @@ export function useRunSession() {
           session_id: sessionId,
           distance_m: distance,
           calories_kcal: calories,
-          duration_s: duration, // Queue duration in seconds
+          duration_s: duration,
           timestamp: new Date().toISOString(),
           status: 'ended',
           synced: false
         });
-      };
+      });
     } catch (e) {
       console.error('Could not queue session tracing stats:', e);
     }
 
     setSessionId(null);
-    setDuration(0); // Reset timer instantly on end
-    setDistance(0); // Reset distance instantly on end
+    setDuration(0); 
+    setDistance(0); 
   };
 
   const addTrackedDistance = (meters) => {
