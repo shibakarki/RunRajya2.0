@@ -1,5 +1,5 @@
 const DB_NAME = 'RunRajyaOfflineDB';
-const DB_VERSION = 2;
+const DB_VERSION = 3; // Upgraded to version 3 to force browser upgrades and create missing stores
 
 /**
  * Centralized IndexedDB Connection Helper.
@@ -13,7 +13,7 @@ export function openDB() {
     request.onupgradeneeded = (e) => {
       const db = e.target.result;
       
-      // Ensure all three game data stores are created safely during upgrades
+      // Upgrade database schema safely
       if (!db.objectStoreNames.contains('zones_grid')) {
         db.createObjectStore('zones_grid', { keyPath: 'id' });
       }
