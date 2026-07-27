@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback } from 'react';
 import { supabase } from '../lib/supabase';
-import { openDB } from '../lib/offlineDb'; // Imported central database helper
+import { openDB } from '../lib/offlineDb';
 
 const FACTION_MAP = {
   'lumbini_guardians': 1,
@@ -28,7 +28,7 @@ export function useOfflineSync() {
         return;
       }
 
-      const db = await openDB(); // Access database safely
+      const db = await openDB();
 
       // ==========================================
       // 1. SYNCHRONIZE PENDING TRACES (SESSIONS)
@@ -85,6 +85,7 @@ export function useOfflineSync() {
 
       const succeededCapIds = [];
       for (const cap of unsyncedCaps) {
+        // Fetch current zone state on server
         const { data: serverZone, error: zoneErr } = await supabase
           .from('zones')
           .select('captured_at')
@@ -95,7 +96,10 @@ export function useOfflineSync() {
           const serverCapturedAt = serverZone?.captured_at ? new Date(serverZone.captured_at).getTime() : 0;
           const localCapturedAt = new Date(cap.captured_at).getTime();
 
-          if (!serverZone?.captured_at || localCapturedAt < serverCapturedAt) {
+          // CORRECTED CONFLICT RESOLUTION RULE:
+          // Sync if local capture is newer (greater) than the current server state,
+          // allowing takeovers and conquests to overwrite older claims [7].
+          if (!serverZone?.captured_at || localCapturedAt > serverCapturedAt) {
             const rawFaction = session?.user?.user_metadata?.faction_id;
             const factionId = FACTION_MAP[rawFaction] || Number(rawFaction) || 1;
 
@@ -126,6 +130,7 @@ export function useOfflineSync() {
               console.error('Failed to update zone claim in database:', claimErr.message);
             }
           } else {
+            // Local claim is older than the current server claim, discard to clean queue
             succeededCapIds.push(cap.zone_id);
           }
         }
@@ -155,6 +160,7 @@ export function useOfflineSync() {
     window.addEventListener('online', handleOnline);
     window.addEventListener('offline', handleOffline);
 
+    // Run safe initial check
     if (isOnline) {
       performSync();
     }
