@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef } from 'react';
 import { supabase } from '../lib/supabase';
-import { openDB } from '../lib/offlineDb'; // Imported central database helper
+import { openDB } from '../lib/offlineDb';
 
 const FALLBACK_CENTER = { lat: 27.5291, lng: 83.447 }; 
 
@@ -18,6 +18,9 @@ function getDistanceMeters(lat1, lon1, lat2, lon2) {
   return R * c;
 }
 
+/**
+ * useZonesGrid – dynamically loads local grids and global claimed sectors.
+ */
 export function useZonesGrid(position) {
   const [grid, setGrid] = useState([]);
   const [loading, setLoading] = useState(false);
@@ -46,59 +49,65 @@ export function useZonesGrid(position) {
       try {
         setLoading(true);
         setError(null);
-        const db = await openDB(); // Access database safely
-        
-        const tx = db.transaction('zones_grid', 'readonly');
-        const store = tx.objectStore('zones_grid');
+        const db = await openDB();
         
         const cachedZones = await new Promise((resolve) => {
+          const tx = db.transaction('zones_grid', 'readonly');
+          const store = tx.objectStore('zones_grid');
           const req = store.getAll();
           req.onsuccess = () => resolve(req.result || []);
           req.onerror = () => resolve([]);
         });
 
-        // Skip downloading if cache holds complete boundaries
         if (cachedZones && cachedZones.length >= 4000) {
           setGrid(cachedZones);
           setLoading(false);
           return;
         }
 
-        console.log(`Cache incomplete (${cachedZones.length} cells). Fetching fresh grid from Supabase...`);
+        console.log(`Cache incomplete (${cachedZones.length} cells). Fetching local & global sectors...`);
 
-        // Multi-page cursor pagination to bypass Supabase's default 1,000-row selection limit
-        let allZones = [];
-        let from = 0;
-        let to = 999;
-        let hasMore = true;
-
-        while (hasMore) {
-          const { data: pageData, error: fetchError } = await supabase
-            .from('zones')
-            .select('id, boundary, owner_id, faction_id, captured_at')
-            .range(from, to); 
-
-          if (fetchError) throw fetchError;
-
-          if (pageData && pageData.length > 0) {
-            allZones = [...allZones, ...pageData];
-            from += 1000;
-            to += 1000;
-          } else {
-            hasMore = false;
+        // 1. Fetch adjacent zones based on player position (Batch of 100 max)
+        const rangeDegrees = 0.02;
+        const { data: localZones, error: localError } = await supabase.rpc(
+          'get_local_zones',
+          {
+            user_lat: activePosition.lat,
+            user_lng: activePosition.lng,
+            range_deg: rangeDegrees
           }
-        }
+        );
 
-        if (allZones.length > 0) {
+        if (localError) throw localError;
+
+        // 2. Fetch ALL globally claimed/contested zones in the district (where owner_id is NOT null)
+        const { data: globalClaims, error: claimsError } = await supabase
+          .from('zones')
+          .select('id, boundary, owner_id, faction_id, captured_at')
+          .not('owner_id', 'is', null);
+
+        if (claimsError) throw claimsError;
+
+        // 3. Combine both lists and remove duplicate IDs
+        const combinedZones = [...(localZones || [])];
+        const localIds = new Set(combinedZones.map(z => z.id));
+
+        (globalClaims || []).forEach((zone) => {
+          if (!localIds.has(zone.id)) {
+            combinedZones.push(zone);
+          }
+        });
+
+        // 4. Overwrite and repair local cache
+        if (combinedZones.length > 0) {
           const writeTx = db.transaction('zones_grid', 'readwrite');
           const writeStore = writeTx.objectStore('zones_grid');
-          
           writeStore.clear();
 
-          allZones.forEach((zone) => {
+          combinedZones.forEach((zone) => {
             writeStore.put(zone);
           });
-          setGrid(allZones);
+          setGrid(combinedZones);
         }
       } catch (err) {
         console.error('Failed to initialize zones grid:', err);

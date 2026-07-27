@@ -32,7 +32,9 @@ function getDistanceMeters(lat1, lon1, lat2, lon2) {
 }
 
 export default function MapPage() {
+  // Set default follow mode state to false (Follow Off)
   const [followPlayer, setFollowPlayer] = useState(false);
+  
   const auth = useAuth();
   const user = auth?.session?.user;
 
@@ -52,40 +54,62 @@ export default function MapPage() {
   // Compute daily goal metrics dynamically using custom target
   const { progressPct, currentValueKm, targetValueKm } = useDailyGoal(distance, dailyTargetM);
 
+  // Active coordinates tracking ref
   const lastPositionRef = useRef(null);
   const gridRef = useRef([]);
 
-  // 1. Geolocation Sensor (Clean, parameterless stream)
-  const { position, gpsStatus, errorMsg } = useGPS();
+  // Local state tracks conquest challenge indicators on screen
+  const [conquestNotice, setConquestNotice] = useState(null);
+
+  // 1. Geolocation Sensor: Evaluates distance traveled and sector captures on every physical movement
+  const { position, gpsStatus, errorMsg } = useGPS((coords) => {
+    if (sessionActive) {
+      if (lastPositionRef.current) {
+        const metersMoved = getDistanceMeters(
+          lastPositionRef.current.lat,
+          lastPositionRef.current.lng,
+          coords.lat,
+          coords.lng
+        );
+        addTrackedDistance(metersMoved);
+      }
+
+      if (gridRef.current && gridRef.current.length > 0) {
+        // Pass active run distance to evaluate conquest challenges
+        evaluateCapture(coords, gridRef.current, sessionId, user?.id, distance).then((result) => {
+          if (result && result.status === 'contested') {
+            setConquestNotice(result.remainingMeters);
+          } else {
+            setConquestNotice(null);
+          }
+        });
+      }
+    }
+    lastPositionRef.current = coords;
+  });
 
   // 2. Fetch adjacent zones in real-time from Supabase based on player's active position
   const { grid, loading: gridLoading } = useZonesGrid(position);
 
-  // 3. UNIFIED POSITION EFFECT:
-  // Listens to real-time position updates, accumulates distance, and evaluates capturing.
-  // Completely eliminates compiling loops and prevents Temporal Dead Zone crashes.
+  // Keep the mutable Grid Reference synchronized on every data load
   useEffect(() => {
-    if (position) {
-      if (sessionActive) {
-        // A. Accumulate running distance
-        if (lastPositionRef.current) {
-          const metersMoved = getDistanceMeters(
-            lastPositionRef.current.lat,
-            lastPositionRef.current.lng,
-            position.lat,
-            position.lng
-          );
-          addTrackedDistance(metersMoved);
-        }
-
-        // B. Evaluate territory capture instantly
-        if (grid && grid.length > 0 && user?.id) {
-          evaluateCapture(position, grid, sessionId, user.id);
-        }
-      }
-      lastPositionRef.current = position;
+    if (grid) {
+      gridRef.current = grid;
     }
-  }, [position, sessionActive, grid, sessionId, user?.id, addTrackedDistance, evaluateCapture]);
+  }, [grid]);
+
+  // REACTIVE INSTANT CAPTURE
+  useEffect(() => {
+    if (sessionActive && position && gridRef.current && gridRef.current.length > 0 && user?.id) {
+      evaluateCapture(position, gridRef.current, sessionId, user.id, distance).then((result) => {
+        if (result && result.status === 'contested') {
+          setConquestNotice(result.remainingMeters);
+        } else {
+          setConquestNotice(null);
+        }
+      });
+    }
+  }, [sessionActive, position, gridRef.current, sessionId, user?.id, evaluateCapture, distance]);
 
   // Compass Magnetometer Sensor
   const { heading, requestPermission: requestCompassPermission } = useCompass();
@@ -94,7 +118,6 @@ export default function MapPage() {
   const [holdProgress, setHoldProgress] = useState(0);
   const holdIntervalRef = useRef(null);
 
-  // Activates the orientation permission on the first screen tap
   const handlePageClick = async () => {
     if (requestCompassPermission) {
       await requestCompassPermission();
@@ -155,7 +178,7 @@ export default function MapPage() {
           </p>
           <button
             type="button"
-            onClick={handleAuthTrigger} // Now fully defined in scope
+            onClick={handleAuthTrigger}
             className="w-full mt-2 py-3 bg-amber-500 hover:bg-amber-400 text-zinc-950 font-bold rounded-xl text-xs uppercase tracking-wider transition-colors"
           >
             Sign In to Unlock Map
@@ -204,11 +227,10 @@ export default function MapPage() {
               )}
             </div>
             
-            {/* Live Database Diagnostics Row */}
             <div className="flex justify-between items-center text-xs">
               <span className="text-zinc-500">Local Sectors Loaded:</span>
               <span className="text-zinc-300 font-mono font-bold">
-                {gridLoading ? 'Syncing...' : `${grid?.length || 0} cells`}
+                {gridLoading ? 'Syncing...' : `${loadedGrid?.length || 0} cells`}
               </span>
             </div>
 
@@ -237,13 +259,21 @@ export default function MapPage() {
       <div className="flex-1 h-[65%] md:h-full relative w-full">
         <MapCanvas 
           position={position} 
-          zones={grid} 
+          zones={loadedGrid} 
           ownedZones={ownedZones} 
           following={followPlayer}
           heading={heading} 
           currentUserId={user?.id} 
           currentUserFactionId={stats?.factionId}
         />
+
+        {/* Tactical Conquest Challenge Overlay (Only visible when standing inside a contested cell) */}
+        {conquestNotice !== null && (
+          <div className="absolute top-24 left-1/2 -translate-x-1/2 z-[1000] px-4 py-2 border border-red-500/30 bg-red-950/80 backdrop-blur-sm rounded-xl text-center shadow-lg pointer-events-none flex flex-col items-center gap-1">
+            <span className="text-[10px] font-mono font-bold text-red-400 uppercase tracking-widest animate-pulse">Contested Sector Detected!</span>
+            <span className="text-xs text-zinc-300">Run <span className="font-bold text-red-500 font-mono">{conquestNotice}m</span> more to conquer</span>
+          </div>
+        )}
 
         {gpsStatus !== 'locked' && (
           <div className="absolute inset-0 z-[1000] bg-zinc-950/80 backdrop-blur-sm flex flex-col items-center justify-center p-6 text-center select-none">

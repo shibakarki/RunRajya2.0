@@ -1,8 +1,8 @@
-import React from 'react';
-import { Polygon } from 'react-leaflet';
+import React, { useState, useEffect } from 'react';
+import { Polygon, useMap } from 'react-leaflet';
 
 const FACTION_COLORS = {
-  1: '#e2554f', // Red faction (Siddharth / standard fallback)
+  1: '#e2554f', // Red faction
   2: '#3f8cf2', // Blue faction
   3: '#22e6b0', // Green faction
   4: '#f2a93c', // Yellow faction
@@ -11,21 +11,17 @@ const FACTION_COLORS = {
 
 const UNOWNED_COLOR = '#546069'; 
 
-/**
- * ZoneLayer – renders captured/uncaptured cells over MapCanvas.
- * Optimized to only render a 5x5 grid (25 closest zones) centered around the player
- * to ensure high-performance rendering on mobile devices.
- */
-export default function ZoneLayer({ 
-  zones = [], 
-  ownedZones = {}, 
-  position, 
-  currentUserId,
-  currentUserFactionId // Added prop to dynamicize capture colors
-}) {
-  if (!position) {
-    return null;
-  }
+export default function ZoneLayer({ zones = [], ownedZones = {}, position, currentUserId, currentUserFactionId }) {
+  const map = useMap();
+  const [currentZoom, setCurrentZoom] = useState(map.getZoom());
+
+  useEffect(() => {
+    const handleZoom = () => setCurrentZoom(map.getZoom());
+    map.on('zoomend', handleZoom);
+    return () => map.off('zoomend', handleZoom);
+  }, [map]);
+
+  if (!position) return null;
 
   const getDistanceSquared = (zone) => {
     try {
@@ -55,33 +51,42 @@ export default function ZoneLayer({
     }
   };
 
-  const localGrid = [...zones]
+  // Separation Logic:
+  // A. Always render any captured/contested zone globally across the map
+  const ownedZonesList = zones.filter((z) => z.owner_id !== null);
+  
+  // B. Keep standard unowned cells under local proximity clipping to protect mobile rendering
+  const unownedZonesList = zones.filter((z) => z.owner_id === null);
+
+  const localUnownedGrid = [...unownedZonesList]
     .sort((a, b) => getDistanceSquared(a) - getDistanceSquared(b))
-    .slice(0, 25);
+    .slice(0, 25); // 5x5 grid
+
+  // Zoom Gate: Hide unowned background grids when zoomed out too far, but keep owned faction sectors visible!
+  const combinedGrid = currentZoom < 13 
+    ? ownedZonesList 
+    : [...ownedZonesList, ...localUnownedGrid];
 
   return (
     <>
-      {localGrid.map((zone) => {
+      {combinedGrid.map((zone) => {
         const coords = typeof zone.boundary === 'string' ? JSON.parse(zone.boundary) : zone.boundary;
         if (!Array.isArray(coords)) return null;
 
         const positions = coords.map((p) => {
-          if (Array.isArray(p)) {
-            return [p[0], p[1]];
-          }
+          if (Array.isArray(p)) return [p[0], p[1]];
           return [p.lat ?? p[0], p.lng ?? p[1]];
         });
 
         const isMine = !!ownedZones[zone.id] || zone.owner_id === currentUserId;
         const isOwned = isMine || !!zone.owner_id;
         
-        // Dynamically resolve active capture color based on your associated faction
         const activeMineColor = currentUserFactionId && FACTION_COLORS[currentUserFactionId]
           ? FACTION_COLORS[currentUserFactionId]
-          : '#22e6b0'; // Fallback green if unaligned/loading
+          : '#22e6b0';
 
         const color = isMine
-          ? activeMineColor
+          ? activeMineColor // Styled in player's faction color [10]
           : zone.faction_id
           ? FACTION_COLORS[zone.faction_id] || UNOWNED_COLOR
           : UNOWNED_COLOR;
