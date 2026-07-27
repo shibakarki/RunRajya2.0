@@ -32,9 +32,7 @@ function getDistanceMeters(lat1, lon1, lat2, lon2) {
 }
 
 export default function MapPage() {
-  // Set default follow mode state to false (Follow Off)
   const [followPlayer, setFollowPlayer] = useState(false);
-  
   const auth = useAuth();
   const user = auth?.session?.user;
 
@@ -54,53 +52,62 @@ export default function MapPage() {
   // Compute daily goal metrics dynamically using custom target
   const { progressPct, currentValueKm, targetValueKm } = useDailyGoal(distance, dailyTargetM);
 
-  // Active coordinates tracking ref
   const lastPositionRef = useRef(null);
   const gridRef = useRef([]);
 
   // Local state tracks conquest challenge indicators on screen
   const [conquestNotice, setConquestNotice] = useState(null);
 
-  // 1. Geolocation Sensor: Evaluates distance traveled and sector captures on every physical movement
-  const { position, gpsStatus, errorMsg } = useGPS((coords) => {
-    if (sessionActive) {
-      if (lastPositionRef.current) {
-        const metersMoved = getDistanceMeters(
-          lastPositionRef.current.lat,
-          lastPositionRef.current.lng,
-          coords.lat,
-          coords.lng
-        );
-        addTrackedDistance(metersMoved);
-      }
-
-      if (gridRef.current && gridRef.current.length > 0) {
-        // Pass active run distance to evaluate conquest challenges
-        evaluateCapture(coords, gridRef.current, sessionId, user?.id, distance).then((result) => {
-          if (result && result.status === 'contested') {
-            setConquestNotice(result.remainingMeters);
-          } else {
-            setConquestNotice(null);
-          }
-        });
-      }
-    }
-    lastPositionRef.current = coords;
-  });
+  // 1. Geolocation Sensor (Clean, parameterless stream)
+  const { position, gpsStatus, errorMsg } = useGPS();
 
   // 2. Fetch adjacent zones in real-time from Supabase based on player's active position
-  const { grid, loading: gridLoading } = useZonesGrid(position);
+  // Destructured properly as 'grid: loadedGrid' to match rendering blocks [10]
+  const { grid: loadedGrid, loading: gridLoading } = useZonesGrid(position);
 
   // Keep the mutable Grid Reference synchronized on every data load
   useEffect(() => {
-    if (grid) {
-      gridRef.current = grid;
+    if (loadedGrid) {
+      gridRef.current = loadedGrid;
     }
-  }, [grid]);
+  }, [loadedGrid]);
+
+  // 3. UNIFIED POSITION EFFECT:
+  // Listens to real-time position updates, accumulates distance, and evaluates capturing.
+  // Completely eliminates compiling loops and prevents Temporal Dead Zone crashes.
+  useEffect(() => {
+    if (position) {
+      if (sessionActive) {
+        // A. Accumulate running distance
+        if (lastPositionRef.current) {
+          const metersMoved = getDistanceMeters(
+            lastPositionRef.current.lat,
+            lastPositionRef.current.lng,
+            position.lat,
+            position.lng
+          );
+          addTrackedDistance(metersMoved);
+        }
+
+        // B. Evaluate territory capture instantly
+        if (gridRef.current && gridRef.current.length > 0 && user?.id) {
+          evaluateCapture(position, gridRef.current, sessionId, user.id, distance).then((result) => {
+            if (result && result.status === 'contested') {
+              setConquestNotice(result.remainingMeters);
+            } else {
+              setConquestNotice(null);
+            }
+          });
+        }
+      }
+      lastPositionRef.current = position;
+    }
+  }, [position, sessionActive, sessionId, user?.id, addTrackedDistance, evaluateCapture, distance]);
 
   // REACTIVE INSTANT CAPTURE
   useEffect(() => {
     if (sessionActive && position && gridRef.current && gridRef.current.length > 0 && user?.id) {
+      console.log('Session activated. Executing initial zone capture check...');
       evaluateCapture(position, gridRef.current, sessionId, user.id, distance).then((result) => {
         if (result && result.status === 'contested') {
           setConquestNotice(result.remainingMeters);
@@ -109,7 +116,7 @@ export default function MapPage() {
         }
       });
     }
-  }, [sessionActive, position, gridRef.current, sessionId, user?.id, evaluateCapture, distance]);
+  }, [sessionActive, position, sessionId, user?.id, evaluateCapture, distance]);
 
   // Compass Magnetometer Sensor
   const { heading, requestPermission: requestCompassPermission } = useCompass();
@@ -227,6 +234,7 @@ export default function MapPage() {
               )}
             </div>
             
+            {/* Live Database Diagnostics Row */}
             <div className="flex justify-between items-center text-xs">
               <span className="text-zinc-500">Local Sectors Loaded:</span>
               <span className="text-zinc-300 font-mono font-bold">
@@ -267,7 +275,7 @@ export default function MapPage() {
           currentUserFactionId={stats?.factionId}
         />
 
-        {/* Tactical Conquest Challenge Overlay (Only visible when standing inside a contested cell) */}
+        {/* Tactical Conquest Challenge Overlay */}
         {conquestNotice !== null && (
           <div className="absolute top-24 left-1/2 -translate-x-1/2 z-[1000] px-4 py-2 border border-red-500/30 bg-red-950/80 backdrop-blur-sm rounded-xl text-center shadow-lg pointer-events-none flex flex-col items-center gap-1">
             <span className="text-[10px] font-mono font-bold text-red-400 uppercase tracking-widest animate-pulse">Contested Sector Detected!</span>
