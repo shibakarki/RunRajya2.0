@@ -32,7 +32,9 @@ function getDistanceMeters(lat1, lon1, lat2, lon2) {
 }
 
 export default function MapPage() {
+  // Default tracking follow state set to false (Follow Off)
   const [followPlayer, setFollowPlayer] = useState(false);
+  
   const auth = useAuth();
   const user = auth?.session?.user;
 
@@ -53,7 +55,6 @@ export default function MapPage() {
   const { progressPct, currentValueKm, targetValueKm } = useDailyGoal(distance, dailyTargetM);
 
   const lastPositionRef = useRef(null);
-  const gridRef = useRef([]);
 
   // Local state tracks conquest challenge indicators on screen
   const [conquestNotice, setConquestNotice] = useState(null);
@@ -62,19 +63,11 @@ export default function MapPage() {
   const { position, gpsStatus, errorMsg } = useGPS();
 
   // 2. Fetch adjacent zones in real-time from Supabase based on player's active position
-  // Destructured properly as 'grid: loadedGrid' to match rendering blocks [10]
   const { grid: loadedGrid, loading: gridLoading } = useZonesGrid(position);
-
-  // Keep the mutable Grid Reference synchronized on every data load
-  useEffect(() => {
-    if (loadedGrid) {
-      gridRef.current = loadedGrid;
-    }
-  }, [loadedGrid]);
 
   // 3. UNIFIED POSITION EFFECT:
   // Listens to real-time position updates, accumulates distance, and evaluates capturing.
-  // Completely eliminates compiling loops and prevents Temporal Dead Zone crashes.
+  // Bound directly to the active state variable loadedGrid to trigger evaluations on load [3].
   useEffect(() => {
     if (position) {
       if (sessionActive) {
@@ -90,8 +83,8 @@ export default function MapPage() {
         }
 
         // B. Evaluate territory capture instantly
-        if (gridRef.current && gridRef.current.length > 0 && user?.id) {
-          evaluateCapture(position, gridRef.current, sessionId, user.id, distance).then((result) => {
+        if (loadedGrid && loadedGrid.length > 0 && user?.id) {
+          evaluateCapture(position, loadedGrid, sessionId, user.id, distance).then((result) => {
             if (result && result.status === 'contested') {
               setConquestNotice(result.remainingMeters);
             } else {
@@ -102,13 +95,13 @@ export default function MapPage() {
       }
       lastPositionRef.current = position;
     }
-  }, [position, sessionActive, sessionId, user?.id, addTrackedDistance, evaluateCapture, distance]);
+  }, [position, sessionActive, loadedGrid, sessionId, user?.id, addTrackedDistance, evaluateCapture, distance]);
 
   // REACTIVE INSTANT CAPTURE
   useEffect(() => {
-    if (sessionActive && position && gridRef.current && gridRef.current.length > 0 && user?.id) {
+    if (sessionActive && position && loadedGrid && loadedGrid.length > 0 && user?.id) {
       console.log('Session activated. Executing initial zone capture check...');
-      evaluateCapture(position, gridRef.current, sessionId, user.id, distance).then((result) => {
+      evaluateCapture(position, loadedGrid, sessionId, user.id, distance).then((result) => {
         if (result && result.status === 'contested') {
           setConquestNotice(result.remainingMeters);
         } else {
@@ -116,7 +109,7 @@ export default function MapPage() {
         }
       });
     }
-  }, [sessionActive, position, sessionId, user?.id, evaluateCapture, distance]);
+  }, [sessionActive, position, loadedGrid, sessionId, user?.id, evaluateCapture, distance]);
 
   // Compass Magnetometer Sensor
   const { heading, requestPermission: requestCompassPermission } = useCompass();
@@ -131,7 +124,6 @@ export default function MapPage() {
     }
   };
 
-  // Safe launcher triggers permissions checklists before initiating run sessions
   const handleAuthTrigger = () => {
     if (typeof auth.requireAuth === 'function') {
       auth.requireAuth(() => {
