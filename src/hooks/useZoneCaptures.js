@@ -45,10 +45,6 @@ function getDistanceMeters(lat1, lon1, lat2, lon2) {
 export function useZoneCaptures() {
   const [ownedZones, setOwnedZones] = useState({});
 
-  /**
-   * Evaluates capture attempts.
-   * Incorporates a physical conquest challenge requirement (150m) for contested sectors.
-   */
   const evaluateCapture = useCallback(async (currentPosition, activeGrid, sessionId, currentUserId, activeSessionDistanceM = 0) => {
     if (!currentPosition || !activeGrid || activeGrid.length === 0 || !sessionId || !currentUserId) {
       return null;
@@ -105,7 +101,7 @@ export function useZoneCaptures() {
       }
     }
 
-    if (matchedZone) {
+    if (matchedZone && !ownedZones[matchedZone.id]) {
       // CONQUEST CHALLENGE RULE:
       // If the sector is currently owned by someone else, we trigger a 150m challenge check.
       const isContested = matchedZone.owner_id !== null && matchedZone.owner_id !== currentUserId;
@@ -120,82 +116,82 @@ export function useZoneCaptures() {
         };
       }
 
-      if (!ownedZones[matchedZone.id]) {
-        const nowISO = new Date().toISOString();
-        let synced = false;
+      const nowISO = new Date().toISOString();
+      let synced = false;
 
-        // 1. Paint territory green in the local UI immediately
-        setOwnedZones((prev) => ({
-          ...prev,
-          [matchedZone.id]: {
-            capturedAt: nowISO,
-            synced: false
-          }
-        }));
-
-        // 2. If online, save instantly to Supabase
-        if (navigator.onLine) {
-          try {
-            const { data: { session } } = await supabase.auth.getSession();
-            const rawFaction = session?.user?.user_metadata?.faction_id;
-            const factionId = FACTION_MAP[rawFaction] || Number(rawFaction) || 1;
-
-            const { error: claimErr } = await supabase
-              .from('zones')
-              .update({
-                owner_id: currentUserId,
-                captured_at: nowISO,
-                faction_id: factionId
-              })
-              .eq('id', matchedZone.id);
-
-            if (!claimErr) {
-              const { error: auditErr } = await supabase
-                .from('captures')
-                .insert({
-                  session_id: sessionId,
-                  zone_id: matchedZone.id,
-                  captured_at: nowISO
-                });
-
-              if (!auditErr) {
-                synced = true;
-                
-                setOwnedZones((prev) => ({
-                  ...prev,
-                  [matchedZone.id]: {
-                    capturedAt: nowISO,
-                    synced: true
-                  }
-                }));
-              }
-            } else {
-              console.error('Database write error during capture claim:', claimErr.message);
-            }
-          } catch (e) {
-            console.warn('Instant database write failed. Falling back to offline queue:', e);
-          }
+      // 1. Paint territory green in the local UI immediately
+      setOwnedZones((prev) => ({
+        ...prev,
+        [matchedZone.id]: {
+          capturedAt: nowISO,
+          synced: false
         }
+      }));
 
-        // 3. Queue capture state in local IndexedDB
+      // 2. If online, save instantly to Supabase
+      if (navigator.onLine) {
         try {
-          const db = await openDB();
-          const tx = db.transaction('captures', 'readwrite');
-          const store = tx.objectStore('captures');
-          
-          store.put({
-            zone_id: matchedZone.id,
-            session_id: sessionId,
-            captured_at: nowISO,
-            owner_id: currentUserId,
-            synced: synced 
-          });
-        } catch (err) {
-          console.error('Failed to update local IndexedDB cache:', err);
-        }
+          const { data: { session } } = await supabase.auth.getSession();
+          const rawFaction = session?.user?.user_metadata?.faction_id;
+          const factionId = FACTION_MAP[rawFaction] || Number(rawFaction) || 1;
 
-        return { status: 'captured', zoneId: matchedZone.id };
+          // A. Update the zone details instantly
+          const { error: claimErr } = await supabase
+            .from('zones')
+            .update({
+              owner_id: currentUserId,
+              captured_at: nowISO,
+              faction_id: factionId
+            })
+            .eq('id', matchedZone.id);
+
+          if (!claimErr) {
+            // B. Log the audit trail record instantly
+            const { error: auditErr } = await supabase
+              .from('captures')
+              .insert({
+                session_id: sessionId,
+                zone_id: matchedZone.id,
+                captured_at: nowISO
+              });
+
+            if (!auditErr) {
+              synced = true;
+              
+              setOwnedZones((prev) => ({
+                ...prev,
+                [matchedZone.id]: {
+                  capturedAt: nowISO,
+                  synced: true
+                }
+              }));
+            }
+          } else {
+            console.error('Database write error during capture claim:', claimErr.message);
+          }
+        } catch (e) {
+          console.warn('Instant database write failed. Falling back to offline queue:', e);
+        }
       }
+
+      // 3. Queue capture state in local IndexedDB (RunRajyaOfflineDB v2)
+      try {
+        const db = await openDB();
+        const tx = db.transaction('captures', 'readwrite');
+        const store = tx.objectStore('captures');
+        
+        store.put({
+          zone_id: matchedZone.id,
+          session_id: sessionId,
+          captured_at: nowISO,
+          owner_id: currentUserId,
+          synced: synced 
+        });
+      } catch (err) {
+        console.error('Failed to update local IndexedDB cache:', err);
+      }
+
+      return { status: 'captured', zoneId: matchedZone.id };
     }
     return null;
   }, [ownedZones]);

@@ -21,7 +21,8 @@ export function useOfflineSync() {
 
     try {
       const { data: { session } } = await supabase.auth.getSession();
-      const userId = session?.user?.id;
+      const user = session?.user; // Declared explicitly to prevent reference errors
+      const userId = user?.id;
 
       if (!userId) {
         setSyncing(false);
@@ -100,7 +101,7 @@ export function useOfflineSync() {
           // Sync if local capture is newer (greater) than the current server state,
           // allowing takeovers and conquests to overwrite older claims [7].
           if (!serverZone?.captured_at || localCapturedAt > serverCapturedAt) {
-            const rawFaction = session?.user?.user_metadata?.faction_id;
+            const rawFaction = user?.user_metadata?.faction_id; // Resolved from local user variable safely
             const factionId = FACTION_MAP[rawFaction] || Number(rawFaction) || 1;
 
             const { error: claimErr } = await supabase

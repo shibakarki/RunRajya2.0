@@ -1,6 +1,7 @@
 import { useState, useEffect, useRef } from 'react';
 import { useCalorieCounter } from './useCalorieCounter';
 import { openDB } from '../lib/offlineDb'; // Imported central database helper
+import { supabase } from '../lib/supabase'; // Imported to initialize active session rows
 
 function generateUUID() {
   return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, (c) => {
@@ -66,12 +67,37 @@ export function useRunSession() {
     };
   }, [sessionActive]);
 
-  const startSession = () => {
+  const startSession = async () => {
     const nextUUID = generateUUID();
     setSessionId(nextUUID);
     setDuration(0);
     setDistance(0);
     setSessionActive(true);
+
+    // SECURITY SYNC:
+    // Instantly write a skeleton active session row to Supabase on start [6].
+    // This satisfies the captures table foreign key checks during your active run [6].
+    if (navigator.onLine) {
+      try {
+        const { data: { session: authSession } } = await supabase.auth.getSession();
+        const userId = authSession?.user?.id;
+        if (userId) {
+          await supabase
+            .from('sessions')
+            .insert({
+              id: nextUUID,
+              user_id: userId,
+              started_at: new Date().toISOString(),
+              status: 'active',
+              distance_m: 0,
+              calories: 0,
+              duration_s: 0
+            });
+        }
+      } catch (err) {
+        console.warn('Could not initialize active database session. Queued as local draft:', err);
+      }
+    }
   };
 
   const endSession = () => {
